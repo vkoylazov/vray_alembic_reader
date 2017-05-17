@@ -166,7 +166,7 @@ void GeomAlembicReader::preRenderBegin(VR::VRayRenderer *vray) {
 	}
 
 	// Create a default material.
-	baseMtl=createMaterial();
+	defaultMtl=createDefaultMaterial();
 }
 
 void GeomAlembicReader::postRenderEnd(VR::VRayRenderer *vray) {
@@ -304,7 +304,7 @@ void GeomAlembicReader::unloadGeometry(VRayRenderer *vray) {
 	meshSources.clear();
 }
 
-VRayPlugin * GeomAlembicReader::createMaterial(void) {
+VRayPlugin * GeomAlembicReader::createDefaultMaterial(void) {
 	VRayPlugin *brdfPlugin=newPlugin("BRDFDiffuse", "diffuse");
 	brdfPlugin->setParameter(factory.saveInFactory(new DefColorParam("color", Color(1.0f, 0.0f, 0.0f))));
 
@@ -374,7 +374,7 @@ ErrorCode GeomAlembicReader::readMtlAssignmentsFile(const CharString &fname, PXM
 VRayPlugin* GeomAlembicReader::getMaterialPluginForInstance(const CharString &abcName) {
 	VRayPlugin *res=mtlAssignments.getMaterialPlugin(abcName);
 	if (!res)
-		res=baseMtl;
+		res=defaultMtl;
 
 	return res;
 }

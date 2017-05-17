@@ -100,33 +100,32 @@ private:
 	VR::CharString mtlDefsFileName;
 	VR::CharString mtlAssignmentsFileName;
 
-	// The material plugin
-	VR::VRayPlugin *baseMtl;
+	/// A default material for shading objects without material assignment.
+	VR::VRayPlugin *defaultMtl;
 
 	VR::Table<AlembicMeshSource*, -1> meshSources;
 	VR::Table<AlembicMeshInstance*, -1> meshInstances;
 
 	void freeMem(void);
 
-	// Shading stuff
-	PluginManager *plugman; // The plugin manager we'll be using to create run-time shaders
-	Factory factory; // A class to hold the parameters of the run-time plugins
+	PluginManager *plugman; ///< The plugin manager we'll be using to create run-time shaders
+	Factory factory; ///< A class to hold the parameters of the run-time plugins
 
-	// A helper method to create a new plugin in the plugin manager and add it to the plugins set
-	// so that we can delete it later.
+	/// A helper method to create a new plugin in the plugin manager and add it to the plugins set
+	/// so that we can delete it later.
 	VR::VRayPlugin *newPlugin(const tchar *pluginType, const tchar *pluginName);
 
-	// A helper method to delete a plugin from the plugin manager and to remove it from the plugins set.
+	/// A helper method to delete a plugin from the plugin manager and to remove it from the plugins set.
 	void deletePlugin(VR::VRayPlugin *plugin);
 
-	// This generates the actual geometry (vertices, faces etc) at the start of each frame
+	/// Generates the actual geometry (vertices, faces etc) at the start of each frame from the Alembic/.vrmesh file.
 	void loadGeometry(int frameNumber, VR::VRayRenderer *vray);
 
-	// This unloads the geometry created for each frame and deletes the created GeomStaticMeshPlugins.
+	/// Unload the geometry created after each frame and delete the created GeomStaticMesh plugins.
 	void unloadGeometry(VR::VRayRenderer *vray);
 
 	typedef VR::HashSet<VR::VRayPlugin*> PluginsSet;
-	PluginsSet plugins; // A list of created plugins; used to delete them at the render end
+	PluginsSet plugins; ///< A list of created plugins; used to delete them at the render end
 
 	/// Create a new AlembicMeshSource from the given MeshVoxel, along with the associated GeomStaticMesh plugin for it.
 	/// @param vray The current V-Ray renderer.
@@ -136,8 +135,8 @@ private:
 	/// @retval The resulting AlembicMeshSource object. May be NULL if the object cannot be created.
 	AlembicMeshSource *createGeomStaticMesh(VR::VRayRenderer *vray, VR::MeshFile &abcFile, VR::MeshVoxel &voxel, int createInstance);
 
-	// Create a material to use for shading
-	VRayPlugin* createMaterial(void);
+	/// Create a default material to use for shading when no material assignment is found for an object.
+	VRayPlugin* createDefaultMaterial(void);
 
 	friend struct GeomAlembicReaderInstance;
 
