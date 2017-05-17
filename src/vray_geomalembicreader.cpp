@@ -52,8 +52,19 @@ struct AlembicMeshSource {
 	DefVectorListParam verticesParam;
 	DefIntListParam facesParam;
 
-	AlembicMeshSource(void):verticesParam("vertices"), facesParam("faces"), geomStaticMesh(NULL) {
-	}
+	DefVectorListParam normalsParam;
+	DefIntListParam faceNormalsParam;
+
+	DefVectorListParam velocitiesParam;
+
+	AlembicMeshSource(void):
+		verticesParam("vertices"),
+		facesParam("faces"),
+		normalsParam("normals"),
+		faceNormalsParam("faceNormals"),
+		velocitiesParam("velocities"),
+		geomStaticMesh(NULL)
+	{}
 };
 
 struct AlembicMeshInstance {
@@ -354,8 +365,8 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 	if (!vertsChannel || !vertsChannel->data || !facesChannel || !facesChannel->data)
 		return NULL;
 
-	VertGeomData *verts=static_cast<VertGeomData*>(vertsChannel->data);
-	FaceTopoData *faces=static_cast<FaceTopoData*>(facesChannel->data);
+	const VertGeomData *verts=static_cast<VertGeomData*>(vertsChannel->data);
+	const FaceTopoData *faces=static_cast<FaceTopoData*>(facesChannel->data);
 
 	AlembicMeshSource *abcMeshSource=new AlembicMeshSource;
 	abcMeshSource->geomStaticMesh=meshPlugin;
@@ -380,6 +391,32 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 		abcMeshSource->facesParam[idx+0]=face.v[0];
 		abcMeshSource->facesParam[idx+1]=face.v[1];
 		abcMeshSource->facesParam[idx+2]=face.v[2];
+	}
+
+	const MeshChannel *normalsChannel=voxel.getChannel(VERT_NORMAL_CHANNEL);
+	const MeshChannel *faceNormalsChannel=voxel.getChannel(VERT_NORMAL_TOPO_CHANNEL);
+	if (normalsChannel && faceNormalsChannel) {
+		const VertGeomData *normals=static_cast<VertGeomData*>(normalsChannel->data);
+		int numNormals=normalsChannel->numElements;
+		abcMeshSource->normalsParam.setCount(numNormals);
+		for (int i=0; i<numNormals; i++) {
+			abcMeshSource->normalsParam[i]=normals[i];
+		}
+
+		const FaceTopoData *faceNormals=static_cast<FaceTopoData*>(faceNormalsChannel->data);
+		int numFaceNormals=faceNormalsChannel->numElements;
+		abcMeshSource->faceNormalsParam.setCount(numFaceNormals*3);
+		for (int i=0; i<numFaceNormals; i++) {
+			const FaceTopoData &face=faceNormals[i];
+
+			int idx=i*3;
+			abcMeshSource->faceNormalsParam[idx+0]=face.v[0];
+			abcMeshSource->faceNormalsParam[idx+1]=face.v[1];
+			abcMeshSource->faceNormalsParam[idx+2]=face.v[2];
+		}
+
+		meshPlugin->setParameter(&abcMeshSource->normalsParam);
+		meshPlugin->setParameter(&abcMeshSource->faceNormalsParam);
 	}
 
 	if (createInstance) {
