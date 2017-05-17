@@ -78,6 +78,55 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 		meshPlugin->setParameter(&abcMeshSource->faceNormalsParam);
 	}
 
+	// Read the UV/color sets
+	int numMapChannels=0;
+	for (int i=0; i<voxel.numChannels; i++) {
+		const MeshChannel &chan=voxel.channels[i];
+		if (chan.channelID>=VERT_TEX_CHANNEL0 && chan.channelID<VERT_TEX_TOPO_CHANNEL0)
+			numMapChannels++;
+	}
+
+	if (numMapChannels>0) {
+		DefMapChannelsParam::MapChannelList &mapChannelsList=abcMeshSource->mapChannelsParams.getMapChannels();
+		mapChannelsList.setCount(numMapChannels);
+
+		int idx=0;
+		for (int chanIdx=0; chanIdx<voxel.numChannels; chanIdx++) {
+			const MeshChannel &chan=voxel.channels[chanIdx];
+			if (chan.channelID>=VERT_TEX_CHANNEL0 && chan.channelID<VERT_TEX_TOPO_CHANNEL0) {
+				DefMapChannelsParam::MapChannel &mapChannel=mapChannelsList[idx];
+
+				mapChannel.idx=idx;
+
+				mapChannel.verts.setCount(chan.numElements);
+				const VertGeomData *uvw=static_cast<const VertGeomData*>(chan.data);
+				int numUVWs=chan.numElements;
+				for (int j=0; j<numUVWs; j++) {
+					mapChannel.verts[j]=uvw[j];
+				}
+
+				const MeshChannel *topoChan=voxel.getChannel(chan.depChannelID);
+				if (topoChan) {
+					const FaceTopoData *uvwFaces=static_cast<FaceTopoData*>(topoChan->data);
+					int numUVWFaces=topoChan->numElements;
+
+					mapChannel.faces.setCount(numUVWFaces*3);
+					for (int j=0; j<numUVWFaces; j++) {
+						const FaceTopoData &face=uvwFaces[j];
+						int idx=j*3;
+						mapChannel.faces[idx+0]=face.v[0];
+						mapChannel.faces[idx+1]=face.v[1];
+						mapChannel.faces[idx+2]=face.v[2];
+					}
+				}
+
+				idx++;
+			}
+		}
+
+		meshPlugin->setParameter(&abcMeshSource->mapChannelsParams);
+	}
+
 	// If motion blur is enabled, read the vertex velocities and set them into the velocitiesParam
 	if (vray->getSequenceData().params.moblur.on) {
 		const MeshChannel *velocitiesChannel=voxel.getChannel(VERT_VELOCITY_CHANNEL);

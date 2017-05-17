@@ -30,6 +30,8 @@ struct AlembicMeshSource {
 
 	VR::DefVectorListParam velocitiesParam; ///< The parameter for the velocities.
 
+	VR::DefMapChannelsParam mapChannelsParams; ///< Parameter for UV/color sets.
+
 	/// Constructor.
 	AlembicMeshSource(void):
 		verticesParam("vertices"),
@@ -37,7 +39,8 @@ struct AlembicMeshSource {
 		normalsParam("normals"),
 		faceNormalsParam("faceNormals"),
 		velocitiesParam("velocities"),
-		geomStaticMesh(NULL)
+		geomStaticMesh(NULL),
+		mapChannelsParams("map_channels")
 	{}
 };
 
