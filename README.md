@@ -10,9 +10,10 @@ This plugin is intended to be a more general-purpose .vrmesh and Alembic reader 
 
 The XML file with the material assignment rules has the following format:
 
-`<materialAssignmentRules>
+```
+<materialAssignmentRules>
   <patternRule>
-    <pattern>/maya_geometry/spoke*</pattern>
+    <pattern>/pTorus/*</pattern>
     <material>orangeMtl</material>
   </patternRule>
   <patternRule>
@@ -21,4 +22,4 @@ The XML file with the material assignment rules has the following format:
   </patternRule>
   ...
 </materialAssignmentsRules>
-`
+```
