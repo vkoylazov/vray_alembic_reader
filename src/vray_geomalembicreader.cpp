@@ -64,8 +64,8 @@ struct AlembicMeshInstance {
 struct GeomAlembicReader: VRayStaticGeomSource, VRaySceneModifierInterface {
 	GeomAlembicReader(VRayPluginDesc *desc): VRayStaticGeomSource(desc) {
 		paramList->setParamCache("file", &fileName, true /* resolvePath */);
-		paramList->setParamCache("materials_file", &mtlsFileName, true /* resolvePath */);
-		paramList->setParamCache("control_file", &ctrlFileName, true /* resolvePath */);
+		paramList->setParamCache("mtl_defs_file", &mtlDefsFileName, true /* resolvePath */);
+		paramList->setParamCache("mtl_assignments_file", &mtlAssignmentsFileName, true /* resolvePath */);
 
 		plugman=NULL;
 	}
@@ -94,8 +94,8 @@ struct GeomAlembicReader: VRayStaticGeomSource, VRaySceneModifierInterface {
 private:
 	// Cached parameters
 	CharString fileName;
-	CharString mtlsFileName;
-	CharString ctrlFileName;
+	CharString mtlDefsFileName;
+	CharString mtlAssignmentsFileName;
 
 	// The material plugin
 	VRayPlugin *baseMtl;
@@ -147,11 +147,8 @@ private:
 	/// @param[out] vrayScene The scene to create the material plugins into.
 	static ErrorCode readMaterialDefinitions(const CharString &fileName, ProgressCallback *prog, CharString &mtlPrefix, VRayScene &vrayScene);
 
-	// The parsed XML control file
-	PXML controlFileXML;
-
 	// Parse the given XML control file into the controlFileXML member.
-	static ErrorCode readControlFile(const CharString &xmlFile, PXML &controlFileXML);
+	static ErrorCode readMtlAssignmentsFile(const CharString &xmlFile, PXML &mtlAssignmentsFileXML);
 
 	// The material assignment rules extracted from controlFileXML
 	MtlAssignmentRulesTable mtlAssignments;
@@ -163,8 +160,8 @@ private:
 struct GeomAlembicReader_Params: VRayParameterListDesc {
 	GeomAlembicReader_Params(void) {
 		addParamString("file", "", -1, "The source Alembic or .vrmesh file", "displayName=(Mesh File), fileAsset=(vrmesh;abc), fileAssetNames=(V-Ray Mesh;Alembic), fileAssetOp=(load)");
-		addParamString("materials_file", "", -1, "An optional .vrscene file with material definitions. If not specified, look for the materials in the current scene", "fileAsset=(vrscene), fileAssetNames=(V-Ray Scene), fileAssetOp=(load)");
-		addParamString("control_file", "", -1, "An optional XML file that controls material assignments, visibility, displacement, subdivision etc", "fileAsset=(xml), fileAssetNames=(XML control file), fileAssetOp=(load)");
+		addParamString("mtl_defs_file", "", -1, "An optional .vrscene file with material definitions. If not specified, look for the materials in the current scene", "fileAsset=(vrscene), fileAssetNames=(V-Ray Scene), fileAssetOp=(load)");
+		addParamString("mtl_assignments_file", "", -1, "An optional XML file that controls material assignments, visibility, displacement, subdivision etc", "fileAsset=(xml), fileAssetNames=(XML control file), fileAssetOp=(load)");
 	}
 };
 
@@ -320,22 +317,23 @@ void GeomAlembicReader::preRenderBegin(VR::VRayRenderer *vray) {
 
 	// Load the materials .vrscene file, if there is one specified
 	mtlsPrefix.clear();
-	if (!mtlsFileName.empty()) {
-		ErrorCode err=readMaterialDefinitions(mtlsFileName, sdata.progress, mtlsPrefix, *vrayScene);
+	if (!mtlDefsFileName.empty()) {
+		ErrorCode err=readMaterialDefinitions(mtlDefsFileName, sdata.progress, mtlsPrefix, *vrayScene);
 		if (err.error()) {
 			CharString errStr=err.getErrorString();
-			sdata.progress->warning("Failed to read material definitions file \"%s\": %s", mtlsFileName.ptr(), errStr.ptr());
+			sdata.progress->warning("Failed to read material definitions file \"%s\": %s", mtlDefsFileName.ptr(), errStr.ptr());
 		}
 	}
 
-	if (!ctrlFileName.empty()) {
-		ErrorCode err=readControlFile(ctrlFileName, controlFileXML);
+	if (!mtlAssignmentsFileName.empty()) {
+		PXML pxml;
+		ErrorCode err=readMtlAssignmentsFile(mtlAssignmentsFileName, pxml);
 		if (err.error()) {
 			CharString errStr=err.getErrorString();
-			sdata.progress->warning("Failed to read XML control file \"%s\": %s", ctrlFileName.ptr(), errStr.ptr());
+			sdata.progress->warning("Failed to read XML control file \"%s\": %s", mtlAssignmentsFileName.ptr(), errStr.ptr());
 		} else {
 			// Parse the material assignments from the control file.
-			mtlAssignments.readFromXML(controlFileXML, *vrayScene, mtlsPrefix, sdata.progress);
+			mtlAssignments.readFromXML(pxml, *vrayScene, mtlsPrefix, sdata.progress);
 		}
 	}
 
@@ -643,7 +641,7 @@ ErrorCode GeomAlembicReader::readMaterialDefinitions(const CharString &fname, Pr
 	return res;
 }
 
-ErrorCode GeomAlembicReader::readControlFile(const CharString &fname, PXML &controlFileXML) {
+ErrorCode GeomAlembicReader::readMtlAssignmentsFile(const CharString &fname, PXML &controlFileXML) {
 	ErrorCode res=controlFileXML.ParseFileStrict(fname.ptr());
 	return res;
 }
