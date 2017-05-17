@@ -148,6 +148,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\geomalembicreader.cpp" />
+    <ClCompile Include="src\geometry_creator.cpp" />
     <ClCompile Include="src\mtl_assignment_rules.cpp" />
     <ClCompile Include="src\vray_geomalembicreader.cpp" />
   </ItemGroup>
