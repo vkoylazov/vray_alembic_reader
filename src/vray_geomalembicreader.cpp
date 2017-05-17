@@ -10,6 +10,7 @@
 #include "factory.h"
 #include "defparams.h"
 #include "mesh_file.h"
+#include "vrayoutputoptions.h"
 
 #include "globalnewdelete.cpp"
 
@@ -18,32 +19,6 @@ using namespace VR;
 const int useSingleMapChannelParam=true;
 
 //*************************************************************
-
-struct MyVectorListParam: VRayPluginParameter {
-	const tchar* getName(void) { return "vertices"; }
-	int getCount(double time) { return p.size(); }
-	
-	VectorList getVectorList(double time) {
-		if (fabs(time-frameTime)<1e-6f) return p;
-
-		int numVerts=p.size();
-		VectorList res(numVerts);
-		for (int i=0; i<numVerts; i++) {
-			res[i]=p[i]+v[i]*(time-frameTime);
-		}
-		return res;
-	}
-
-	VRayParameterType getType(int index, double time) { return paramtype_vector; }
-
-	VectorList& getVerts(void) { return p; }
-	VectorList& getVelocities(void) { return v; }
-	void setFrameTime(double time) { frameTime=time; }
-private:
-	double frameTime;
-	VectorList p; // vertices
-	VectorList v; // velocities
-};
 
 // Holds information about a GeomStaticMesh plugin created for each object from the Alembic file.
 struct AlembicMeshSource {
@@ -447,7 +422,7 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 }
 
 void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
-	const VRaySequenceData &sdata=vray->getSequenceData();
+	VRaySequenceData &sdata=vray->getSequenceDataNoConst();
 
 	const tchar *fname=fileName.ptr();
 	if (!fname) fname="";
@@ -464,6 +439,20 @@ void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 	// Set some parameters for the Alembic reader before we read the file
 	alembicFile->setStringManager(vray->getStringManager());
 	alembicFile->setThreadManager(vray->getSequenceData().threadManager);
+
+	float fps=24.0f;
+	SequenceDataUnitsInfo *unitsInfo=static_cast<SequenceDataUnitsInfo*>(GET_INTERFACE(&sdata, EXT_SDATA_UNITSINFO));
+	if (unitsInfo) fps=unitsInfo->framesScale;
+	alembicFile->setFramesPerSecond(fps);
+
+	// Motion blur params
+	AlembicParams abcParams;
+	abcParams.mbOn=sdata.params.moblur.on;
+	abcParams.mbTimeIndices=sdata.params.moblur.geomSamples-1;
+	abcParams.mbDuration=sdata.params.moblur.duration;
+	abcParams.mbIntervalCenter=sdata.params.moblur.intervalCenter;
+
+	alembicFile->setAdditionalParams(&abcParams);
 
 	if (!alembicFile->init(fname)) {
 		if (sdata.progress) {
