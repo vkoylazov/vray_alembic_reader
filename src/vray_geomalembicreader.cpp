@@ -131,7 +131,7 @@ private:
 	PluginsSet plugins; // A list of created plugins; used to delete them at the render end
 
 	// Create a new AlembicMeshSource from the given MeshVoxel.
-	AlembicMeshSource *createGeomStaticMesh(MeshVoxel &voxel, int createInstance);
+	AlembicMeshSource *createGeomStaticMesh(VRayRenderer *vray, MeshFile &abcFile, MeshVoxel &voxel, int createInstance);
 
 	// Create a material to use for shading
 	VRayPlugin* createMaterial(void);
@@ -333,10 +333,16 @@ void GeomAlembicReader::deletePlugin(VRayPlugin *plugin) {
 	}
 }
 
-AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(MeshVoxel &voxel, int createInstance) {
+AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, MeshFile &abcFile, MeshVoxel &voxel, int createInstance) {
 	// Create our geometry plugin
 	tchar meshPluginName[512]="";
-	vutils_sprintf_n(meshPluginName, COUNT_OF(meshPluginName), "voxel_%i", meshSources.count());
+	StringID strID=abcFile.getShaderSetStringID(&voxel, 0);
+	if (strID.id!=0) {
+		strID=vray->getStringManager()->getStringID(strID.id);
+		vutils_sprintf_n(meshPluginName, COUNT_OF(meshPluginName), "voxel_%s", strID.str.ptr());
+	} else {
+		vutils_sprintf_n(meshPluginName, COUNT_OF(meshPluginName), "voxel_%i", meshSources.count());
+	}
 
 	VRayPlugin *meshPlugin=newPlugin("GeomStaticMesh", meshPluginName);
 	if (!meshPlugin)
@@ -395,6 +401,7 @@ void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 	const tchar *fname=fileName.ptr();
 	if (!fname) fname="";
 
+	// Create a reader suitable for the given file name (vrmesh or Alembic)
 	MeshFile *alembicFile=newDefaultMeshFile(fname);
 	if (!alembicFile) {
 		if (sdata.progress) {
@@ -402,6 +409,10 @@ void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 		}
 		return;
 	}
+
+	// Set some parameters for the Alembic reader before we read the file
+	alembicFile->setStringManager(vray->getStringManager());
+	alembicFile->setThreadManager(vray->getSequenceData().threadManager);
 
 	if (!alembicFile->init(fname)) {
 		if (sdata.progress) {
@@ -426,7 +437,7 @@ void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 				continue;
 
 			// Create a GeomStaticMesh plugin for this voxel
-			AlembicMeshSource *abcMeshSource=createGeomStaticMesh(*voxel, true);
+			AlembicMeshSource *abcMeshSource=createGeomStaticMesh(vray, *alembicFile, *voxel, true);
 			if (abcMeshSource) {
 				meshSources+=abcMeshSource;
 			}
