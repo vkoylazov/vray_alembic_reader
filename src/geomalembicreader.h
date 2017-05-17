@@ -18,18 +18,19 @@
 #include "sceneparser.h"
 #include "mtl_assignment_rules.h"
 
-// Holds information about a GeomStaticMesh plugin created for each object from the Alembic file.
+/// Information about a GeomStaticMesh plugin created for each object from the Alembic file.
 struct AlembicMeshSource {
-	VR::VRayPlugin *geomStaticMesh; // The GeomStaticMesh plugin along with its parameters.
+	VR::VRayPlugin *geomStaticMesh; ///< The GeomStaticMesh plugin.
 
-	VR::DefVectorListParam verticesParam;
-	VR::DefIntListParam facesParam;
+	VR::DefVectorListParam verticesParam; ///< The parameter for the vertices.
+	VR::DefIntListParam facesParam; ///< The parameter for the faces.
 
-	VR::DefVectorListParam normalsParam;
-	VR::DefIntListParam faceNormalsParam;
+	VR::DefVectorListParam normalsParam; ///< The parameter for the normals.
+	VR::DefIntListParam faceNormalsParam; ///< The parameter for the face normals.
 
-	VR::DefVectorListParam velocitiesParam;
+	VR::DefVectorListParam velocitiesParam; ///< The parameter for the velocities.
 
+	/// Constructor.
 	AlembicMeshSource(void):
 		verticesParam("vertices"),
 		facesParam("faces"),
@@ -40,15 +41,17 @@ struct AlembicMeshSource {
 	{}
 };
 
+/// Information about an instance of an AlembicMeshSource.
 struct AlembicMeshInstance {
-	AlembicMeshSource *meshSource;
-	VR::TraceTransform tm;
-	VR::CharString abcName; // The full Alembic name that corresponds to this instance
+	AlembicMeshSource *meshSource; ///< The original mesh.
+	VR::TraceTransform tm; ///< The transformation matrix.
+	VR::CharString abcName; ///< The full Alembic name of this instance from the Alembic file.
 
-	VR::VRayStaticGeometry *meshInstance; // The instance returned from the GeomStaticMesh object
-	VR::CharString userAttr; // User attributes
-	int meshIndex; // The index of the instance
+	VR::VRayStaticGeometry *meshInstance; ///< The instance returned from the GeomStaticMesh object.
+	VR::CharString userAttr; ///< User attributes
+	int meshIndex; ///< The index of the instance
 
+	/// Constructor.
 	AlembicMeshInstance(void):meshSource(NULL), meshInstance(NULL), meshIndex(-1) {
 	}
 };
@@ -56,6 +59,7 @@ struct AlembicMeshInstance {
 //********************************************************
 // GeomAlembicReader
 
+/// The parameter descriptor for the GeomAlembicReader plugin.
 struct GeomAlembicReader_Params: VR::VRayParameterListDesc {
 	GeomAlembicReader_Params(void) {
 		addParamString("file", "", -1, "The source Alembic or .vrmesh file", "displayName=(Mesh File), fileAsset=(vrmesh;abc), fileAssetNames=(V-Ray Mesh;Alembic), fileAssetOp=(load)");
@@ -64,7 +68,9 @@ struct GeomAlembicReader_Params: VR::VRayParameterListDesc {
 	}
 };
 
+/// The GeomAlembicReader plugin.
 struct GeomAlembicReader: VR::VRayStaticGeomSource, VR::VRaySceneModifierInterface {
+	/// Constructor.
 	GeomAlembicReader(VR::VRayPluginDesc *desc): VR::VRayStaticGeomSource(desc) {
 		paramList->setParamCache("file", &fileName, true /* resolvePath */);
 		paramList->setParamCache("mtl_defs_file", &mtlDefsFileName, true /* resolvePath */);
@@ -72,10 +78,13 @@ struct GeomAlembicReader: VR::VRayStaticGeomSource, VR::VRaySceneModifierInterfa
 
 		plugman=NULL;
 	}
+
+	/// Destructor.
 	~GeomAlembicReader(void) {
 		plugman=NULL;
 	}
 
+	/// Return the interfaces that we support.
 	PluginInterface* newInterface(InterfaceID id) VRAY_OVERRIDE {
 		return (id==EXT_SCENE_MODIFIER)? static_cast<VRaySceneModifierInterface*>(this) : VRayStaticGeomSource::newInterface(id);
 	}
@@ -103,7 +112,10 @@ private:
 	/// A default material for shading objects without material assignment.
 	VR::VRayPlugin *defaultMtl;
 
+	/// The mesh plugins that will be instanced for rendering.
 	VR::Table<AlembicMeshSource*, -1> meshSources;
+
+	/// The instances that will get rendered.
 	VR::Table<AlembicMeshInstance*, -1> meshInstances;
 
 	void freeMem(void);

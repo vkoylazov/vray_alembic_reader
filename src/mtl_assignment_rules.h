@@ -8,9 +8,9 @@
 
 /// A structure that describes a material assignment rule from an object name pattern to a material interface.
 struct MtlAssignmentRule {
-	VR::CharString objNamePattern; // A pattern for the object names that should have this material.
-	VR::CharString mtlName; // The name of the material.
-	VR::VRayPlugin *mtlPlugin; // The material itself.
+	VR::CharString objNamePattern; ///< A pattern for the object names that should have this material. May contain wildcards * and ?
+	VR::CharString mtlName; ///< The name of the material.
+	VR::VRayPlugin *mtlPlugin; ///< The material plugin itself (may be NULL).
 
 	MtlAssignmentRule(void):mtlPlugin(NULL) {}
 };
