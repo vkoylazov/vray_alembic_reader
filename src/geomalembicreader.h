@@ -64,7 +64,7 @@ struct GeomAlembicReader_Params: VR::VRayParameterListDesc {
 	GeomAlembicReader_Params(void) {
 		addParamString("file", "", -1, "The source Alembic or .vrmesh file", "displayName=(Mesh File), fileAsset=(vrmesh;abc), fileAssetNames=(V-Ray Mesh;Alembic), fileAssetOp=(load)");
 		addParamString("mtl_defs_file", "", -1, "An optional .vrscene file with material definitions. If not specified, look for the materials in the current scene", "fileAsset=(vrscene), fileAssetNames=(V-Ray Scene), fileAssetOp=(load)");
-		addParamString("mtl_assignments_file", "", -1, "An optional XML file that controls material assignments, visibility, displacement, subdivision etc", "fileAsset=(xml), fileAssetNames=(XML control file), fileAssetOp=(load)");
+		addParamString("mtl_assignments_file", "", -1, "An optional XML file that controls material assignments", "fileAsset=(xml), fileAssetNames=(XML control file), fileAssetOp=(load)");
 	}
 };
 

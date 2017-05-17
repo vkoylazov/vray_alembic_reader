@@ -158,7 +158,7 @@ void GeomAlembicReader::preRenderBegin(VR::VRayRenderer *vray) {
 		ErrorCode err=readMtlAssignmentsFile(mtlAssignmentsFileName, pxml);
 		if (err.error()) {
 			CharString errStr=err.getErrorString();
-			sdata.progress->warning("Failed to read XML control file \"%s\": %s", mtlAssignmentsFileName.ptr(), errStr.ptr());
+			sdata.progress->warning("Failed to read XML material assignments file \"%s\": %s", mtlAssignmentsFileName.ptr(), errStr.ptr());
 		} else {
 			// Parse the material assignments from the control file.
 			mtlAssignments.readFromXML(pxml, *vrayScene, mtlsPrefix, sdata.progress);
