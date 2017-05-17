@@ -2,6 +2,12 @@
 
 using namespace VR;
 
+int isValidMappingChannel(const MeshChannel &chan) {
+	if (chan.channelID<VERT_TEX_CHANNEL0 || chan.channelID>=VERT_TEX_TOPO_CHANNEL0)
+		return false;
+	return true;
+}
+
 AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, MeshFile &abcFile, MeshVoxel &voxel, int createInstance) {
 	// Create our geometry plugin
 	tchar meshPluginName[512]="";
@@ -82,7 +88,7 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 	int numMapChannels=0;
 	for (int i=0; i<voxel.numChannels; i++) {
 		const MeshChannel &chan=voxel.channels[i];
-		if (chan.channelID>=VERT_TEX_CHANNEL0 && chan.channelID<VERT_TEX_TOPO_CHANNEL0)
+		if (isValidMappingChannel(chan))
 			numMapChannels++;
 	}
 
@@ -93,7 +99,7 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 		int idx=0;
 		for (int chanIdx=0; chanIdx<voxel.numChannels; chanIdx++) {
 			const MeshChannel &chan=voxel.channels[chanIdx];
-			if (chan.channelID>=VERT_TEX_CHANNEL0 && chan.channelID<VERT_TEX_TOPO_CHANNEL0) {
+			if (isValidMappingChannel(chan)) {
 				DefMapChannelsParam::MapChannel &mapChannel=mapChannelsList[idx];
 
 				mapChannel.idx=idx;
