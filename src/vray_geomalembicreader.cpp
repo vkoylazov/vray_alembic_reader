@@ -393,6 +393,7 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 		abcMeshSource->facesParam[idx+2]=face.v[2];
 	}
 
+	// Read the normals and set them into the normalsParam and faceNormalsParam
 	const MeshChannel *normalsChannel=voxel.getChannel(VERT_NORMAL_CHANNEL);
 	const MeshChannel *faceNormalsChannel=voxel.getChannel(VERT_NORMAL_TOPO_CHANNEL);
 	if (normalsChannel && faceNormalsChannel) {
@@ -417,6 +418,19 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 
 		meshPlugin->setParameter(&abcMeshSource->normalsParam);
 		meshPlugin->setParameter(&abcMeshSource->faceNormalsParam);
+	}
+
+	// If motion blur is enabled, read the vertex velocities and set them into the velocitiesParam
+	if (vray->getSequenceData().params.moblur.on) {
+		const MeshChannel *velocitiesChannel=voxel.getChannel(VERT_VELOCITY_CHANNEL);
+		if (velocitiesChannel && velocitiesChannel->data && velocitiesChannel->numElements==numVerts) {
+			const VertGeomData *velocities=static_cast<VertGeomData*>(velocitiesChannel->data);
+			abcMeshSource->velocitiesParam.setCount(numVerts);
+			for (int i=0; i<numVerts; i++) {
+				abcMeshSource->velocitiesParam[i]=velocities[i];
+			}
+			meshPlugin->setParameter(&abcMeshSource->velocitiesParam);		
+		}
 	}
 
 	if (createInstance) {
