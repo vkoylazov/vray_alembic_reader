@@ -133,7 +133,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;_USRDLL;VRAY_ALEMBIC_READER_EXPORTS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>C:\Program Files\Chaos Group\V-Ray\Maya 2017 for x64\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>./;C:\Program Files\Chaos Group\V-Ray\Maya 2017 for x64\include</AdditionalIncludeDirectories>
       <ExceptionHandling>Async</ExceptionHandling>
       <DisableSpecificWarnings>4251</DisableSpecificWarnings>
     </ClCompile>
@@ -148,6 +148,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\mtl_assignment_rules.cpp" />
     <ClCompile Include="src\vray_geomalembicreader.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

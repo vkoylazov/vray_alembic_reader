@@ -11,6 +11,10 @@
 #include "defparams.h"
 #include "mesh_file.h"
 #include "vrayoutputoptions.h"
+#include "pxml.h"
+#include "vraysceneplugman.h"
+#include "sceneparser.h"
+#include "mtl_assignment_rules.h"
 
 #include "globalnewdelete.cpp"
 
@@ -45,6 +49,7 @@ struct AlembicMeshSource {
 struct AlembicMeshInstance {
 	AlembicMeshSource *meshSource;
 	TraceTransform tm;
+	CharString abcName; // The full Alembic name that corresponds to this instance
 
 	VRayStaticGeometry *meshInstance; // The instance returned from the GeomStaticMesh object
 	CharString userAttr; // User attributes
@@ -54,9 +59,14 @@ struct AlembicMeshInstance {
 	}
 };
 
+//********************************************************
+// GeomAlembicReader
 struct GeomAlembicReader: VRayStaticGeomSource, VRaySceneModifierInterface {
 	GeomAlembicReader(VRayPluginDesc *desc): VRayStaticGeomSource(desc) {
 		paramList->setParamCache("file", &fileName, true /* resolvePath */);
+		paramList->setParamCache("materials_file", &mtlsFileName, true /* resolvePath */);
+		paramList->setParamCache("control_file", &ctrlFileName, true /* resolvePath */);
+
 		plugman=NULL;
 	}
 	~GeomAlembicReader(void) {
@@ -84,6 +94,8 @@ struct GeomAlembicReader: VRayStaticGeomSource, VRaySceneModifierInterface {
 private:
 	// Cached parameters
 	CharString fileName;
+	CharString mtlsFileName;
+	CharString ctrlFileName;
 
 	// The material plugin
 	VRayPlugin *baseMtl;
@@ -123,11 +135,36 @@ private:
 	VRayPlugin* createMaterial(void);
 
 	friend struct GeomAlembicReaderInstance;
+
+	CharString mtlsPrefix; // The prefix to use when specifying plugins from the materials definitions file.
+
+	/// Read material definitions from the specified file and merge them into the given scene.
+	/// The plugin names are prefixed with the file name in case several readers reference the same
+	/// material definitions file.
+	/// @param[in] fileName The .vrscene file name with the material definitions.
+	/// @param prog A progress callback to print information from parsing the .vrscene file.
+	/// @param[out] mtlPrefix The prefix that was prepended to all plugins when reading the .vrscene file.
+	/// @param[out] vrayScene The scene to create the material plugins into.
+	static ErrorCode readMaterialDefinitions(const CharString &fileName, ProgressCallback *prog, CharString &mtlPrefix, VRayScene &vrayScene);
+
+	// The parsed XML control file
+	PXML controlFileXML;
+
+	// Parse the given XML control file into the controlFileXML member.
+	static ErrorCode readControlFile(const CharString &xmlFile, PXML &controlFileXML);
+
+	// The material assignment rules extracted from controlFileXML
+	MtlAssignmentRulesTable mtlAssignments;
+
+	// Return the material plugin to use for the given Alembic file name
+	VRayPlugin* getMaterialPluginForInstance(const CharString &abcName);
 };
 
 struct GeomAlembicReader_Params: VRayParameterListDesc {
 	GeomAlembicReader_Params(void) {
-		addParamString("file", "", -1, NULL, "displayName=(Mesh File), fileAsset=(vrmesh;abc), fileAssetNames=(V-Ray Mesh;Alembic), fileAssetOp=(load)");
+		addParamString("file", "", -1, "The source Alembic or .vrmesh file", "displayName=(Mesh File), fileAsset=(vrmesh;abc), fileAssetNames=(V-Ray Mesh;Alembic), fileAssetOp=(load)");
+		addParamString("materials_file", "", -1, "An optional .vrscene file with material definitions. If not specified, look for the materials in the current scene", "fileAsset=(vrscene), fileAssetNames=(V-Ray Scene), fileAssetOp=(load)");
+		addParamString("control_file", "", -1, "An optional XML file that controls material assignments, visibility, displacement, subdivision etc", "fileAsset=(xml), fileAssetNames=(XML control file), fileAssetOp=(load)");
 	}
 };
 
@@ -148,10 +185,7 @@ struct GeomAlembicReaderInstance: VRayStaticGeometry {
 	}
 
 	void compileGeometry(VR::VRayRenderer *vray, VR::TraceTransform *tm, double *times, int tmCount) {
-		MaterialInterface *mtl=getMaterial(reader->baseMtl);
-		BSDFInterface *bsdf=getBSDF(reader->baseMtl);
-
-		createMeshInstances(mtl, bsdf, renderID, NULL, NULL, TraceTransform(1), objectID, userAttrs.ptr(), primaryVisibility);
+		createMeshInstances(renderID, NULL, NULL, TraceTransform(1), objectID, userAttrs.ptr(), primaryVisibility);
 
 		double tmTime=vray->getFrameData().t;
 
@@ -196,7 +230,7 @@ struct GeomAlembicReaderInstance: VRayStaticGeometry {
 		}
 	}
 
-	void createMeshInstances(MaterialInterface *_mtl, BSDFInterface *_bsdf, int renderID, VolumetricInterface *volume, LightList *lightList, const TraceTransform &baseTM, int objectID, const tchar *userAttr, int primaryVisibility) {
+	void createMeshInstances(int renderID, VolumetricInterface *volume, LightList *lightList, const TraceTransform &baseTM, int objectID, const tchar *userAttr, int primaryVisibility) {
 		int numInstances=reader->meshInstances.count();
 		for (int i=0; i<numInstances; i++) {
 			AlembicMeshInstance *abcInstance=reader->meshInstances[i];
@@ -205,7 +239,8 @@ struct GeomAlembicReaderInstance: VRayStaticGeometry {
 
 			StaticGeomSourceInterface *geom=static_cast<StaticGeomSourceInterface*>(GET_INTERFACE(abcInstance->meshSource->geomStaticMesh, EXT_STATIC_GEOM_SOURCE));
 			if (geom) {
-				abcInstance->meshInstance=geom->newInstance(getMaterial(reader->baseMtl), getBSDF(reader->baseMtl), renderID, NULL, lightList, baseTM, objectID, userAttr, primaryVisibility);
+				VRayPlugin *mtlPlugin=reader->getMaterialPluginForInstance(abcInstance->abcName);
+				abcInstance->meshInstance=geom->newInstance(getMaterial(mtlPlugin), getBSDF(mtlPlugin), renderID, NULL, lightList, baseTM, objectID, userAttr, primaryVisibility);
 			}
 		}
 	}
@@ -223,11 +258,11 @@ struct GeomAlembicReaderInstance: VRayStaticGeometry {
 		}
 	}
 
-	MaterialInterface* getMaterial(VRayPlugin *mtl) {
+	static MaterialInterface* getMaterial(VRayPlugin *mtl) {
 		return static_cast<MaterialInterface*>(GET_INTERFACE(mtl, EXT_MATERIAL));
 	}
 
-	BSDFInterface* getBSDF(VRayPlugin *mtl) {
+	static BSDFInterface* getBSDF(VRayPlugin *mtl) {
 		return static_cast<BSDFInterface*>(GET_INTERFACE(mtl, EXT_BSDF));
 	}
 
@@ -271,6 +306,40 @@ void GeomAlembicReader::preRenderBegin(VR::VRayRenderer *vray) {
 	if (!pluginRenderer) return; // Don't know how to modify the scene
 	plugman=pluginRenderer->getPluginManager();
 
+	// Get access to the current V-Ray scene
+	VRayRendererSceneAccess *vraySceneAccess=static_cast<VRayRendererSceneAccess*>(GET_INTERFACE(vray, EXT_VRAYRENDERER_SCENEACCESS));
+	if (!vraySceneAccess) return; // We need a V-Ray scene for now.
+
+	VRayScene *vrayScene=vraySceneAccess->getScene();
+	if (!vrayScene) return;
+
+	const VRaySequenceData &sdata=vray->getSequenceData();
+
+	// Read the parameters explicitly as there is no-one to do it for us here.
+	paramList->cacheParams();
+
+	// Load the materials .vrscene file, if there is one specified
+	mtlsPrefix.clear();
+	if (!mtlsFileName.empty()) {
+		ErrorCode err=readMaterialDefinitions(mtlsFileName, sdata.progress, mtlsPrefix, *vrayScene);
+		if (err.error()) {
+			CharString errStr=err.getErrorString();
+			sdata.progress->warning("Failed to read material definitions file \"%s\": %s", mtlsFileName.ptr(), errStr.ptr());
+		}
+	}
+
+	if (!ctrlFileName.empty()) {
+		ErrorCode err=readControlFile(ctrlFileName, controlFileXML);
+		if (err.error()) {
+			CharString errStr=err.getErrorString();
+			sdata.progress->warning("Failed to read XML control file \"%s\": %s", ctrlFileName.ptr(), errStr.ptr());
+		} else {
+			// Parse the material assignments from the control file.
+			mtlAssignments.readFromXML(controlFileXML, *vrayScene, mtlsPrefix, sdata.progress);
+		}
+	}
+
+	// Create a default material.
 	baseMtl=createMaterial();
 }
 
@@ -414,6 +483,7 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 		abcMeshInstance->meshIndex=meshInstances.count();
 		abcMeshInstance->meshSource=abcMeshSource;
 		abcMeshInstance->tm.makeIdentity();
+		abcMeshInstance->abcName=strID.str;
 
 		meshInstances+=abcMeshInstance;
 	}
@@ -439,6 +509,7 @@ void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 	// Set some parameters for the Alembic reader before we read the file
 	alembicFile->setStringManager(vray->getStringManager());
 	alembicFile->setThreadManager(vray->getSequenceData().threadManager);
+	alembicFile->setUseFullNames(true); // We want to get the full names from the Alembic file
 
 	float fps=24.0f;
 	SequenceDataUnitsInfo *unitsInfo=static_cast<SequenceDataUnitsInfo*>(GET_INTERFACE(&sdata, EXT_SDATA_UNITSINFO));
@@ -513,10 +584,75 @@ void GeomAlembicReader::unloadGeometry(VRayRenderer *vray) {
 
 VRayPlugin * GeomAlembicReader::createMaterial(void) {
 	VRayPlugin *brdfPlugin=newPlugin("BRDFDiffuse", "diffuse");
-	brdfPlugin->setParameter(factory.saveInFactory(new DefColorParam("color", Color(0.8f, 0.5f, 0.3f))));
+	brdfPlugin->setParameter(factory.saveInFactory(new DefColorParam("color", Color(1.0f, 0.0f, 0.0f))));
 
 	VRayPlugin *mtlPlugin=newPlugin("MtlSingleBRDF", "diffuseMtl");
 	mtlPlugin->setParameter(factory.saveInFactory(new DefPluginParam("brdf", brdfPlugin)));
 
 	return mtlPlugin;
+}
+
+//***********************************************************
+
+// A list of prefixes for plugin types to ignore when reading
+// material definition .vrscene files. This is because such files
+// may contain other plugins like rendering settings, geometry,
+// camera, lights etc and we want to ignore those and only create
+// materials and textures.
+const tchar *ignoredPlugins[]={
+	"Settings",
+	"Geom",
+	"RenderView"
+	"Camera",
+	"Node",
+	"Light",
+	"Sun"
+};
+
+struct FilterCallback: ScenePluginFilter {
+	// If the given plugin type starts with any of the prefixes listed in the ingoredPlugins[] array,
+	// skip it.
+	int filter(const CharString &type, CharString &name, Object *object) VRAY_OVERRIDE {
+		for (int i=0; i<COUNT_OF(ignoredPlugins); i++) {
+			if (strncmp(type.ptr(), ignoredPlugins[i], strlen(ignoredPlugins[i]))==0) {
+				return false;
+			}
+		}
+		return true;
+	}
+};
+
+ErrorCode GeomAlembicReader::readMaterialDefinitions(const CharString &fname, ProgressCallback *prog, CharString &mtlPrefix, VRayScene &vrayScene) {
+	ErrorCode res;
+
+	// For the moment, prefix all plugins in the scene with the name of the
+	// material definitions file. In this way, materials with the same name
+	// coming out of different material definition files will not mess up with
+	// each other.
+	CharString prefix=fname;
+	prefix.append("_");
+
+	FilterCallback filterCallback;
+	res=vrayScene.readFileEx(fname.ptr(), &filterCallback, prefix.ptr(), true /* create plugins */, prog);
+
+	if (!res.error())
+		mtlPrefix=prefix; // If the file was read successfully, use the prefix.
+	else
+		mtlPrefix.clear(); // Otherwise, no prefix - will look into the current scene only.
+
+	return res;
+}
+
+ErrorCode GeomAlembicReader::readControlFile(const CharString &fname, PXML &controlFileXML) {
+	ErrorCode res=controlFileXML.ParseFileStrict(fname.ptr());
+	return res;
+}
+
+// Return the material plugin to use for the given Alembic file name
+VRayPlugin* GeomAlembicReader::getMaterialPluginForInstance(const CharString &abcName) {
+	VRayPlugin *res=mtlAssignments.getMaterialPlugin(abcName);
+	if (!res)
+		res=baseMtl;
+
+	return res;
 }
