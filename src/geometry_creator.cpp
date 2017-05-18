@@ -9,9 +9,20 @@ int isValidMappingChannel(const MeshChannel &chan) {
 }
 
 AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, MeshFile &abcFile, MeshVoxel &voxel, int createInstance, DefaultMeshSetsData &meshSets) {
-	// Create our geometry plugin
+	// First figure out the name of the Alembic object from the face IDs in the voxel.
+	// For Alembic files, all faces have the same face ID and we can use it to read the
+	// name of the shader set, which is the name of the Alembic object.
+	int mtlID=0;
+	const MeshChannel *faceInfoChannel=voxel.getChannel(FACE_INFO_CHANNEL);
+	if (faceInfoChannel) {
+		const FaceInfoData *faceInfo=static_cast<FaceInfoData*>(faceInfoChannel->data);
+		if (faceInfo)
+			mtlID=faceInfo[0].mtlID;
+	}
+
+	// The Alembic name is stored as the shader set name.
 	tchar meshPluginName[512]="";
-	StringID strID=abcFile.getShaderSetStringID(&voxel, 0);
+	StringID strID=abcFile.getShaderSetStringID(&voxel, mtlID);
 	if (strID.id!=0) {
 		strID=vray->getStringManager()->getStringID(strID.id);
 		vutils_sprintf_n(meshPluginName, COUNT_OF(meshPluginName), "voxel_%s", strID.str.ptr());
