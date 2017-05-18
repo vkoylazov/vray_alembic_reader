@@ -348,7 +348,8 @@ const tchar *ignoredPlugins[]={
 	"Camera",
 	"Node",
 	"Light",
-	"Sun"
+	"Sun",
+	"MayaLight"
 };
 
 struct FilterCallback: ScenePluginFilter {
