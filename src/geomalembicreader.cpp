@@ -374,6 +374,8 @@ ErrorCode GeomAlembicReader::readMaterialDefinitions(const CharString &fname, Pr
 	CharString prefix=fname;
 	prefix.append("_");
 
+	// Append the material definition .vrscene file to the current scene; filter out
+	// any plugins that we are not interested in (render settings, cameras, geometry etc).
 	FilterCallback filterCallback;
 	res=vrayScene.readFileEx(fname.ptr(), &filterCallback, prefix.ptr(), true /* create plugins */, prog);
 
