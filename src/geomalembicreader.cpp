@@ -365,9 +365,11 @@ ErrorCode GeomAlembicReader::readMaterialDefinitions(const CharString &fname, Pr
 	return res;
 }
 
-ErrorCode GeomAlembicReader::readMtlAssignmentsFile(const CharString &fname, PXML &controlFileXML) {
-	ErrorCode res=controlFileXML.ParseFileStrict(fname.ptr());
-	return res;
+ErrorCode GeomAlembicReader::readMtlAssignmentsFile(const CharString &fname, PXML &pxml) {
+	int err=pxml.ParseFile(fname.ptr());
+	if (err)
+		return ErrorCode(__FUNCTION__, err, "Failed to parse XML file");
+	return ErrorCode();
 }
 
 // Return the material plugin to use for the given Alembic file name
