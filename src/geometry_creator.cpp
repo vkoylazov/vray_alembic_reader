@@ -8,7 +8,7 @@ int isValidMappingChannel(const MeshChannel &chan) {
 	return true;
 }
 
-AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, MeshFile &abcFile, MeshVoxel &voxel, int createInstance) {
+AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, MeshFile &abcFile, MeshVoxel &voxel, int createInstance, DefaultMeshSetsData &meshSets) {
 	// Create our geometry plugin
 	tchar meshPluginName[512]="";
 	StringID strID=abcFile.getShaderSetStringID(&voxel, 0);
@@ -93,7 +93,7 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 	}
 
 	if (numMapChannels>0) {
-		DefMapChannelsParam::MapChannelList &mapChannelsList=abcMeshSource->mapChannelsParams.getMapChannels();
+		DefMapChannelsParam::MapChannelList &mapChannelsList=abcMeshSource->mapChannelsParam.getMapChannels();
 		mapChannelsList.setCount(numMapChannels);
 
 		int idx=0;
@@ -102,7 +102,7 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 			if (isValidMappingChannel(chan)) {
 				DefMapChannelsParam::MapChannel &mapChannel=mapChannelsList[idx];
 
-				mapChannel.idx=idx;
+				mapChannel.idx=chan.channelID-VERT_TEX_CHANNEL0;
 
 				mapChannel.verts.setCount(chan.numElements);
 				const VertGeomData *uvw=static_cast<const VertGeomData*>(chan.data);
@@ -130,7 +130,21 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 			}
 		}
 
-		meshPlugin->setParameter(&abcMeshSource->mapChannelsParams);
+		meshPlugin->setParameter(&abcMeshSource->mapChannelsParam);
+
+		// Fill in the mapping channel names
+		abcMeshSource->mapChannelNamesParam.setCount(numMapChannels, 0.0f);
+		int numUVSets=meshSets.getNumSets(MeshSetsData::meshSetType_uvSet);
+		for (int i=0; i<mapChannelsList.count(); i++) {
+			const tchar *setName=NULL;
+			if (i<numUVSets) setName=meshSets.getSetName(MeshSetsData::meshSetType_uvSet, i);
+			else setName=meshSets.getSetName(MeshSetsData::meshSetType_colorSet, i-numUVSets);
+
+			if (NULL==setName) setName="";
+			abcMeshSource->mapChannelNamesParam.setString(setName, i, 0.0f);
+		}
+
+		meshPlugin->setParameter(&abcMeshSource->mapChannelNamesParam);
 	}
 
 	// If motion blur is enabled, read the vertex velocities and set them into the velocitiesParam

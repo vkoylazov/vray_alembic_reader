@@ -255,6 +255,26 @@ void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 		alembicFile->setCurrentFrame(float(frameNumber));
 
 		int numVoxels=alembicFile->getNumVoxels();
+
+		// First find out the preview voxel and read the information about
+		// UV and color sets from it.
+		DefaultMeshSetsData setsData;
+		for (int i=0; i<numVoxels; i++) {
+			uint32 flags=alembicFile->getVoxelFlags(i);
+			if (flags & MVF_PREVIEW_VOXEL) {
+				MeshVoxel *previewVoxel=alembicFile->getVoxel(i);
+				if (previewVoxel) {
+					VUtils::MeshChannel *mayaInfoChannel=previewVoxel->getChannel(MAYA_INFO_CHANNEL);
+					if (mayaInfoChannel) {
+						setsData.readFromBuffer((uint8*) mayaInfoChannel->data, mayaInfoChannel->elementSize*mayaInfoChannel->numElements);
+					}
+					alembicFile->releaseVoxel(previewVoxel);
+				}
+				break;
+			}
+		}
+
+		// Go through all the voxels and create the corresponding geometry.
 		for (int i=0; i<numVoxels; i++) {
 			// Determine if this voxel contains a mesh
 			uint32 flags=alembicFile->getVoxelFlags(i);
@@ -270,7 +290,7 @@ void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 				continue;
 
 			// Create a GeomStaticMesh plugin for this voxel
-			AlembicMeshSource *abcMeshSource=createGeomStaticMesh(vray, *alembicFile, *voxel, true);
+			AlembicMeshSource *abcMeshSource=createGeomStaticMesh(vray, *alembicFile, *voxel, true, setsData);
 			if (abcMeshSource) {
 				meshSources+=abcMeshSource;
 			}

@@ -3,6 +3,7 @@
 #include "utils.h"
 #include "rayserver.h"
 #include "mesh_file.h"
+#include "mesh_sets_info.h"
 #include "vrayinterface.h"
 #include "vrayrenderer.h"
 #include "vrayplugins.h"
@@ -16,6 +17,7 @@
 #include "pxml.h"
 #include "vraysceneplugman.h"
 #include "sceneparser.h"
+
 #include "mtl_assignment_rules.h"
 
 /// Information about a GeomStaticMesh plugin created for each object from the Alembic file.
@@ -30,7 +32,9 @@ struct AlembicMeshSource {
 
 	VR::DefVectorListParam velocitiesParam; ///< The parameter for the velocities.
 
-	VR::DefMapChannelsParam mapChannelsParams; ///< Parameter for UV/color sets.
+	VR::DefMapChannelsParam mapChannelsParam; ///< Parameter for UV/color sets.
+
+	VR::DefStringListParam mapChannelNamesParam; ///< A parameter with the map channel names.
 
 	/// Constructor.
 	AlembicMeshSource(void):
@@ -40,7 +44,8 @@ struct AlembicMeshSource {
 		faceNormalsParam("faceNormals"),
 		velocitiesParam("velocities"),
 		geomStaticMesh(NULL),
-		mapChannelsParams("map_channels")
+		mapChannelsParam("map_channels"),
+		mapChannelNamesParam("map_channels_names")
 	{}
 };
 
@@ -147,8 +152,9 @@ private:
 	/// @param abcFile The parsed .vrmesh/Alembic file.
 	/// @param voxel The voxel to create a mesh plugin for.
 	/// @param createInstance true to also create an AlembicMeshInstance object for the mesh and add it to the meshInstances table.
+	/// @param meshSets Information about the UV and color sets in the Alembic file. Used to fill in the names of the mapping channels.
 	/// @retval The resulting AlembicMeshSource object. May be NULL if the object cannot be created.
-	AlembicMeshSource *createGeomStaticMesh(VR::VRayRenderer *vray, VR::MeshFile &abcFile, VR::MeshVoxel &voxel, int createInstance);
+	AlembicMeshSource *createGeomStaticMesh(VR::VRayRenderer *vray, VR::MeshFile &abcFile, VR::MeshVoxel &voxel, int createInstance, VR::DefaultMeshSetsData &meshSets);
 
 	/// Create a default material to use for shading when no material assignment is found for an object.
 	VRayPlugin* createDefaultMaterial(void);
