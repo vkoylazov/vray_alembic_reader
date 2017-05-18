@@ -36,6 +36,12 @@ struct AlembicMeshSource {
 
 	VR::DefStringListParam mapChannelNamesParam; ///< A parameter with the map channel names.
 
+	/// Parameter for the dynamic_geometry flag of the GeomStaticMesh plugin. Enabling dynamic
+	/// geometry allows efficient instancing of the mesh geometry. Otherwise it is replicated
+	/// for each instance. For now we always set this flag to true, although potentially this
+	/// can be optimized.
+	VR::DefBoolParam dynamicGeometryParam;
+
 	/// Constructor.
 	AlembicMeshSource(void):
 		verticesParam("vertices"),
@@ -45,7 +51,8 @@ struct AlembicMeshSource {
 		velocitiesParam("velocities"),
 		geomStaticMesh(NULL),
 		mapChannelsParam("map_channels"),
-		mapChannelNamesParam("map_channels_names")
+		mapChannelNamesParam("map_channels_names"),
+		dynamicGeometryParam("dynamic_geometry", true)
 	{}
 };
 

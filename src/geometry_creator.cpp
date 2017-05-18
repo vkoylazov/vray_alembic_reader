@@ -35,6 +35,7 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 	AlembicMeshSource *abcMeshSource=new AlembicMeshSource;
 	abcMeshSource->geomStaticMesh=meshPlugin;
 
+	meshPlugin->setParameter(&abcMeshSource->dynamicGeometryParam);
 	meshPlugin->setParameter(&abcMeshSource->verticesParam);
 	meshPlugin->setParameter(&abcMeshSource->facesParam);
 
