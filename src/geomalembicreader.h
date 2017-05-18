@@ -77,6 +77,10 @@ struct GeomAlembicReader_Params: VR::VRayParameterListDesc {
 };
 
 /// The GeomAlembicReader plugin.
+/// It reads the alembic file and creates a GeomStaticMesh via the SceneModifierInterface for every mesh in the alembic file.
+/// This plugin is meant to be put in one or more Node plugins. For every such Node plugin,
+/// GeomAlembicReader will create a GeomAlembicReaderInstance class, which does the job of compiling the geometry of the
+/// GeomStaticMesh plugins with the Node transform and the appropriate material.
 struct GeomAlembicReader: VR::VRayStaticGeomSource, VR::VRaySceneModifierInterface {
 	/// Constructor.
 	GeomAlembicReader(VR::VRayPluginDesc *desc): VR::VRayStaticGeomSource(desc) {
@@ -104,14 +108,16 @@ struct GeomAlembicReader: VR::VRayStaticGeomSource, VR::VRaySceneModifierInterfa
 	void deleteInstance(VR::VRayStaticGeometry *instance) VRAY_OVERRIDE;
 
 	// From VRayPlugin
-	void frameBegin(VR::VRayRenderer *vray) VRAY_OVERRIDE;
-	void frameEnd(VR::VRayRenderer *vray) VRAY_OVERRIDE;
+	void frameBegin(VR::VRayRenderer *vray) VRAY_OVERRIDE; // This is where the GeomStaticMesh plugins will be created
+	void frameEnd(VR::VRayRenderer *vray) VRAY_OVERRIDE; // This is where we destroy our geometry plugins
 
 	// From VRaySceneModifierInterface
-	void preRenderBegin(VR::VRayRenderer *vray) VRAY_OVERRIDE; // This is where the new plugins will be created
-	void postRenderEnd(VR::VRayRenderer *vray) VRAY_OVERRIDE; // This is where we destroy our plugins
+	void preRenderBegin(VR::VRayRenderer *vray) VRAY_OVERRIDE; // This is where the new material plugins will be created
+	void postRenderEnd(VR::VRayRenderer *vray) VRAY_OVERRIDE; // This is where we destroy our material plugins
 
 private:
+	friend struct GeomAlembicReaderInstance;
+
 	// Cached parameters
 	VR::CharString fileName;
 	VR::CharString mtlDefsFileName;
@@ -123,7 +129,7 @@ private:
 	/// The mesh plugins that will be instanced for rendering.
 	VR::Table<AlembicMeshSource*, -1> meshSources;
 
-	/// The instances that will get rendered.
+	/// The instances that will get rendered. This list will be populated by GeomAlembicReaderInstance.
 	VR::Table<AlembicMeshInstance*, -1> meshInstances;
 
 	void freeMem(void);
@@ -158,8 +164,6 @@ private:
 
 	/// Create a default material to use for shading when no material assignment is found for an object.
 	VRayPlugin* createDefaultMaterial(void);
-
-	friend struct GeomAlembicReaderInstance;
 
 	VR::CharString mtlsPrefix; ///< The prefix to use when specifying plugins from the materials definitions file.
 
