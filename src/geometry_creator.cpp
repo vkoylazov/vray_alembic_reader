@@ -43,6 +43,13 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 	const VertGeomData *verts=static_cast<VertGeomData*>(vertsChannel->data);
 	const FaceTopoData *faces=static_cast<FaceTopoData*>(facesChannel->data);
 
+	TraceTransform vertexTransform(1);
+	int hasTransform=voxel.getTM(vertexTransform);
+
+	Matrix normalMatrix(1);
+	if (hasTransform)
+		normalMatrix=normalTransformMatrixWithOrientation(vertexTransform.m);
+
 	AlembicMeshSource *abcMeshSource=new AlembicMeshSource;
 	abcMeshSource->geomStaticMesh=meshPlugin;
 
@@ -54,7 +61,7 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 	int numVerts=vertsChannel->numElements;
 	abcMeshSource->verticesParam.setCount(numVerts);
 	for (int i=0; i<numVerts; i++) {
-		abcMeshSource->verticesParam[i]=verts[i];
+		abcMeshSource->verticesParam[i]=vertexTransform*verts[i];
 	}
 
 	// Read the faces and set them into the facesParam
@@ -77,7 +84,7 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 		int numNormals=normalsChannel->numElements;
 		abcMeshSource->normalsParam.setCount(numNormals);
 		for (int i=0; i<numNormals; i++) {
-			abcMeshSource->normalsParam[i]=normals[i];
+			abcMeshSource->normalsParam[i]=(normalMatrix*normals[i]).getUnitVector0();
 		}
 
 		const FaceTopoData *faceNormals=static_cast<FaceTopoData*>(faceNormalsChannel->data);
