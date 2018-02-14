@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="src\geomalembicreader.cpp" />
+    <ClCompile Include="src\geometry_creator.cpp" />
+    <ClCompile Include="src\mtl_assignment_rules.cpp" />
+    <ClCompile Include="src\vray_geomalembicreader.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="include">
+      <UniqueIdentifier>{64e94471-abc5-4ca2-b58f-1ca10b13dde5}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\geomalembicreader.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\mtl_assignment_rules.h">
+      <Filter>include</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
