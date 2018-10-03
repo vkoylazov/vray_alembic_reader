@@ -225,6 +225,7 @@ void GeomAlembicReader::deletePlugin(VRayPlugin *plugin) {
 
 void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 	VRaySequenceData &sdata=vray->getSequenceDataNoConst();
+	const VRayFrameData &fdata=vray->getFrameData();
 
 	const tchar *fname=fileName.ptr();
 	if (!fname) fname="";
@@ -248,10 +249,12 @@ void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 	if (unitsInfo) fps=unitsInfo->framesScale;
 	alembicFile->setFramesPerSecond(fps);
 
+	int nsamples=1; // Number of motion blur samples.
+
 	// Motion blur params
 	AlembicParams abcParams;
 	abcParams.mbOn=sdata.params.moblur.on;
-	abcParams.mbTimeIndices=sdata.params.moblur.geomSamples-1;
+	abcParams.mbTimeIndices=nsamples;
 	abcParams.mbDuration=sdata.params.moblur.duration;
 	abcParams.mbIntervalCenter=sdata.params.moblur.intervalCenter;
 
@@ -264,7 +267,8 @@ void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 			sdata.progress->error("Cannot initialize file \"%s\": %s", fname, errStr.ptr());
 		}
 	} else {
-		alembicFile->setCurrentFrame(float(frameNumber));
+		float time=float(frameNumber);
+		alembicFile->setCurrentFrame(time);
 
 		int numVoxels=alembicFile->getNumVoxels();
 
@@ -297,17 +301,11 @@ void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 			if (0!=(flags & MVF_INSTANCE_VOXEL)) // We are only interested in the source meshes here, we deal with instances separately
 				continue;
 
-			MeshVoxel *voxel=alembicFile->getVoxel(i);
-			if (!voxel)
-				continue;
-
 			// Create a GeomStaticMesh plugin for this voxel
-			AlembicMeshSource *abcMeshSource=createGeomStaticMesh(vray, *alembicFile, *voxel, true, setsData);
+			AlembicMeshSource *abcMeshSource=createGeomStaticMesh(vray, *alembicFile, i, true, setsData, nsamples, fdata.frameStart, fdata.frameEnd);
 			if (abcMeshSource) {
 				meshSources+=abcMeshSource;
 			}
-
-			alembicFile->releaseVoxel(voxel);
 		}
 	}
 
