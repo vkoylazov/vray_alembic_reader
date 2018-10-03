@@ -59,7 +59,7 @@ struct AlembicMeshSource {
 /// Information about an instance of an AlembicMeshSource.
 struct AlembicMeshInstance {
 	AlembicMeshSource *meshSource; ///< The original mesh.
-	VR::TraceTransform tm; ///< The transformation matrix.
+	VR::Transform tm; ///< The transformation matrix.
 	VR::CharString abcName; ///< The full Alembic name of this instance from the Alembic file.
 
 	VR::VRayStaticGeometry *meshInstance; ///< The instance returned from the GeomStaticMesh object.
@@ -111,7 +111,17 @@ struct GeomAlembicReader: VR::VRayStaticGeomSource, VR::VRaySceneModifierInterfa
 	PluginBase* getPlugin(void) VRAY_OVERRIDE { return this; }
 
 	// From GeomSourceExtension
-	VR::VRayStaticGeometry* newInstance(VR::MaterialInterface *mtl, VR::BSDFInterface *bsdf, int renderID, VR::VolumetricInterface *volume, VR::LightList *lightList, const VR::TraceTransform &baseTM, int objectID, const tchar *userAttr, int primaryVisibility) VRAY_OVERRIDE;
+	VR::VRayStaticGeometry* newInstance(
+		VR::MaterialInterface *mtl,
+		VR::BSDFInterface *bsdf,
+		int renderID,
+		VR::VolumetricInterface *volume,
+		VR::LightList *lightList,
+		const VR::Transform &baseTM,
+		int objectID,
+		const tchar *userAttr,
+		int primaryVisibility
+	) VRAY_OVERRIDE;
 	void deleteInstance(VR::VRayStaticGeometry *instance) VRAY_OVERRIDE;
 
 	// From VRayPlugin

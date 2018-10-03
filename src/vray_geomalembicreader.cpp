@@ -1,7 +1,5 @@
 #include "geomalembicreader.h"
 
-#include "globalnewdelete.cpp"
-
 using namespace VR;
 
 #define GeomAlembicReader_PluginID PluginID(LARGE_CONST(2017051657))

@@ -10,12 +10,12 @@ struct GeomAlembicReaderInstance: VRayStaticGeometry {
 	}
 
 	void compileGeometry(VR::VRayRenderer *vray, VR::TraceTransform *tm, double *times, int tmCount) {
-		createMeshInstances(renderID, NULL, NULL, TraceTransform(1), objectID, userAttrs.ptr(), primaryVisibility);
+		createMeshInstances(renderID, NULL, NULL, Transform(1), objectID, userAttrs.ptr(), primaryVisibility);
 
 		double tmTime=vray->getFrameData().t;
 
 		// Allocate memory for mesh transformations
-		TraceTransform *tms=(TraceTransform*) alloca(tmCount*sizeof(TraceTransform));
+		Transform *tms=(Transform*) alloca(tmCount*sizeof(Transform));
 
 		int numInstances=reader->meshInstances.count();
 		for (int i=0; i<numInstances; i++) {
@@ -25,7 +25,7 @@ struct GeomAlembicReaderInstance: VRayStaticGeometry {
 
 			// Compute the transformations for this mesh
 			for (int k=0; k<tmCount; k++) {
-				tms[k]=tm[k]*(abcInstance->tm);
+				tms[k]=Transform(tm[k]*TraceTransform(abcInstance->tm));
 			}
 
 			abcInstance->meshInstance->compileGeometry(vray, tms, times, tmCount);
@@ -55,7 +55,7 @@ struct GeomAlembicReaderInstance: VRayStaticGeometry {
 		}
 	}
 
-	void createMeshInstances(int renderID, VolumetricInterface *volume, LightList *lightList, const TraceTransform &baseTM, int objectID, const tchar *userAttr, int primaryVisibility) {
+	void createMeshInstances(int renderID, VolumetricInterface *volume, LightList *lightList, const Transform &baseTM, int objectID, const tchar *userAttr, int primaryVisibility) {
 		int numInstances=reader->meshInstances.count();
 		for (int i=0; i<numInstances; i++) {
 			AlembicMeshInstance *abcInstance=reader->meshInstances[i];
@@ -109,7 +109,17 @@ protected:
 //*************************************************************
 // GeomAlembicReader
 
-VRayStaticGeometry* GeomAlembicReader::newInstance(MaterialInterface *_mtl, BSDFInterface *_bsdf, int renderID, VolumetricInterface *volume, LightList *lightList, const TraceTransform &baseTM, int objectID, const tchar *userAttr, int primaryVisibility) {
+VRayStaticGeometry* GeomAlembicReader::newInstance(
+	MaterialInterface *_mtl,
+	BSDFInterface *_bsdf,
+	int renderID,
+	VolumetricInterface *volume,
+	LightList *lightList,
+	const Transform &baseTM,
+	int objectID,
+	const tchar *userAttr,
+	int primaryVisibility
+) {
 	GeomAlembicReaderInstance *abcReaderInstance=new GeomAlembicReaderInstance(this);
 	abcReaderInstance->setRenderID(renderID);
 	abcReaderInstance->setObjectID(objectID);
@@ -247,9 +257,11 @@ void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 
 	alembicFile->setAdditionalParams(&abcParams);
 
-	if (!alembicFile->init(fname)) {
+	ErrorCode res=alembicFile->init(fname);
+	if (res.error()) {
 		if (sdata.progress) {
-			sdata.progress->error("Cannot initialize file \"%s\"", fname);
+			CharString errStr=res.getErrorString();
+			sdata.progress->error("Cannot initialize file \"%s\": %s", fname, errStr.ptr());
 		}
 	} else {
 		alembicFile->setCurrentFrame(float(frameNumber));
@@ -389,9 +401,9 @@ ErrorCode GeomAlembicReader::readMaterialDefinitions(const CharString &fname, Pr
 }
 
 ErrorCode GeomAlembicReader::readMtlAssignmentsFile(const CharString &fname, PXML &pxml) {
-	int err=pxml.ParseFile(fname.ptr());
-	if (err)
-		return ErrorCode(__FUNCTION__, err, "Failed to parse XML file");
+	ErrorCode res=pxml.ParseFileStrict(fname.ptr());
+	if (res.error())
+		return ErrorCode(res, __FUNCTION__, -1, "Failed to parse XML file");
 	return ErrorCode();
 }
 

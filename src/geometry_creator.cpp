@@ -43,7 +43,7 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 	const VertGeomData *verts=static_cast<VertGeomData*>(vertsChannel->data);
 	const FaceTopoData *faces=static_cast<FaceTopoData*>(facesChannel->data);
 
-	TraceTransform vertexTransform(1);
+	Transform vertexTransform(1);
 	int hasTransform=voxel.getTM(vertexTransform);
 
 	AlembicMeshSource *abcMeshSource=new AlembicMeshSource;
