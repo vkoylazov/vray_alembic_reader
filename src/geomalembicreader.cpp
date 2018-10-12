@@ -9,7 +9,7 @@ struct GeomAlembicReaderInstance: VRayStaticGeometry {
 	GeomAlembicReaderInstance(GeomAlembicReader *abcReader):reader(abcReader) {
 	}
 
-	void compileGeometry(VR::VRayRenderer *vray, VR::TraceTransform *tm, double *times, int tmCount) {
+	void compileGeometry(VR::VRayRenderer *vray, const VR::Transform *tm, double *times, int tmCount) VRAY_OVERRIDE {
 		createMeshInstances(renderID, NULL, NULL, Transform(1), objectID, userAttrs.ptr(), primaryVisibility);
 
 		double tmTime=vray->getFrameData().t;
@@ -25,14 +25,14 @@ struct GeomAlembicReaderInstance: VRayStaticGeometry {
 
 			// Compute the transformations for this mesh
 			for (int k=0; k<tmCount; k++) {
-				tms[k]=Transform(tm[k]*TraceTransform(abcInstance->tm));
+				tms[k]=(tm[k]*abcInstance->tm);
 			}
 
 			abcInstance->meshInstance->compileGeometry(vray, tms, times, tmCount);
 		}
 	}
 
-	void clearGeometry(VR::VRayRenderer *vray) {
+	void clearGeometry(VR::VRayRenderer *vray) VRAY_OVERRIDE {
 		int numInstances=reader->meshInstances.count();
 		for (int i=0; i<numInstances; i++) {
 			AlembicMeshInstance *abcInstance=reader->meshInstances[i];
@@ -44,7 +44,7 @@ struct GeomAlembicReaderInstance: VRayStaticGeometry {
 		deleteMeshInstances();
 	}
 
-	void updateMaterial(MaterialInterface *mtl, BSDFInterface *bsdf, int renderID, VolumetricInterface *volume, LightList *lightList, int objectID) {
+	void updateMaterial(MaterialInterface *mtl, BSDFInterface *bsdf, int renderID, VolumetricInterface *volume, LightList *lightList, int objectID) VRAY_OVERRIDE {
 		int numInstances=reader->meshInstances.count();
 		for (int i=0; i<numInstances; i++) {
 			AlembicMeshInstance *abcInstance=reader->meshInstances[i];
@@ -53,6 +53,28 @@ struct GeomAlembicReaderInstance: VRayStaticGeometry {
 
 			abcInstance->meshInstance->updateMaterial(mtl, bsdf, renderID, volume, lightList, objectID);
 		}
+	}
+
+	VRayShadeData* getShadeData(const VRayContext &rc) VRAY_OVERRIDE { return NULL; }
+	VRayShadeInstance* getShadeInstance(const VRayContext &rc) VRAY_OVERRIDE { return NULL; }
+
+	void setPrimaryVisibility(int onOff) { primaryVisibility=onOff; }
+	void setRenderID(int id) { renderID=id; }
+	void setObjectID(int id) { objectID=id; }
+	void setUserAttrs(const tchar *str) { userAttrs=str; }
+protected:
+	GeomAlembicReader *reader;
+	int primaryVisibility;
+	int renderID;
+	int objectID;
+	CharString userAttrs;
+
+	static MaterialInterface* getMaterial(VRayPlugin *mtl) {
+		return static_cast<MaterialInterface*>(GET_INTERFACE(mtl, EXT_MATERIAL));
+	}
+
+	static BSDFInterface* getBSDF(VRayPlugin *mtl) {
+		return static_cast<BSDFInterface*>(GET_INTERFACE(mtl, EXT_BSDF));
 	}
 
 	void createMeshInstances(int renderID, VolumetricInterface *volume, LightList *lightList, const Transform &baseTM, int objectID, const tchar *userAttr, int primaryVisibility) {
@@ -82,28 +104,6 @@ struct GeomAlembicReaderInstance: VRayStaticGeometry {
 			abcInstance->meshInstance=NULL;
 		}
 	}
-
-	static MaterialInterface* getMaterial(VRayPlugin *mtl) {
-		return static_cast<MaterialInterface*>(GET_INTERFACE(mtl, EXT_MATERIAL));
-	}
-
-	static BSDFInterface* getBSDF(VRayPlugin *mtl) {
-		return static_cast<BSDFInterface*>(GET_INTERFACE(mtl, EXT_BSDF));
-	}
-
-	VRayShadeData* getShadeData(const VRayContext &rc) { return NULL; }
-	VRayShadeInstance* getShadeInstance(const VRayContext &rc) { return NULL; }
-
-	void setPrimaryVisibility(int onOff) { primaryVisibility=onOff; }
-	void setRenderID(int id) { renderID=id; }
-	void setObjectID(int id) { objectID=id; }
-	void setUserAttrs(const tchar *str) { userAttrs=str; }
-protected:
-	GeomAlembicReader *reader;
-	int primaryVisibility;
-	int renderID;
-	int objectID;
-	CharString userAttrs;
 };
 
 //*************************************************************
@@ -249,7 +249,7 @@ void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 	if (unitsInfo) fps=unitsInfo->framesScale;
 	alembicFile->setFramesPerSecond(fps);
 
-	int nsamples=1; // Number of motion blur samples.
+	int nsamples=5; // Number of motion blur samples.
 
 	// Motion blur params
 	AlembicParams abcParams;

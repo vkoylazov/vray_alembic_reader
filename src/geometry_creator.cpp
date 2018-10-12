@@ -81,7 +81,7 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 	abcMeshSource->setNumTimeSteps(nsamples);
 
 	for (int i=0; i<nsamples; i++) {
-		float time=frameStart+(frameEnd-frameStart)/double(nsamples);
+		float time=float(frameStart+(frameEnd-frameStart)*i/double(nsamples-1));
 
 		if (i>0) {
 			int timeFlags=i|(nsamples<<16);
