@@ -24,12 +24,13 @@ struct GeomAlembicReader;
 
 typedef VR::Table<VR::CharString> StringList;
 
-/// A single map channel for DefMapChannelsParam.
+/// A single map channel for AnimatedMapChannelsParam.
 struct AbcMapChannel {
 	int idx; ///< Index of the channel.
 	VUtils::Table<VUtils::Vector> verts; ///< Texture vertices.
 	VUtils::Table<int> faces; ///< Texture faces.
 
+	/// Assignment operator.
 	void operator=(const AbcMapChannel &mapChan) {
 		idx=mapChan.idx;
 		verts.copy(mapChan.verts);
@@ -51,17 +52,23 @@ inline void copyKeyframeData(StringList &dst, const StringList &src) {
 	dst.copy(src);
 }
 
+/// Generic animated parameter based on keyframes. Does not perform any interpolation,
+/// just returns the closest keyframe to the requested time values.
 template<class T>
 struct AnimatedParam: VR::VRayPluginParameter {
 	AnimatedParam(const tchar *name):paramName(name) {}
 
+	/// Return the name of the parameter.
 	const tchar* getName(void) VRAY_OVERRIDE { return paramName; }
 	
+	/// Reserve space for the given number of keyframes.
 	void reserveKeyframes(int numKeyframes) {
 		keyframes.setCount(numKeyframes, true /* exact */);
 		keyframes.setCount(0);
 	}
 
+	/// Add a new keyframe at the specified time and with the specified data.
+	/// @note Keyframes must be added in increasing time order.
 	void addKeyframe(double time, const T &data) {
 		if (keyframes.count()>0) {
 			vassert(time>keyframes.last().time);
@@ -72,6 +79,8 @@ struct AnimatedParam: VR::VRayPluginParameter {
 		keyframe.data=data;
 	}
 
+	/// Add a new keyframe and returns a reference to the data so that it can be filled in.
+	/// @note Keyframes must be created in increasing time order.
 	T& addKeyframe(double time) {
 		if (keyframes.count()>0) {
 			vassert(time>keyframes.last().time);
@@ -123,6 +132,7 @@ protected:
 
 };
 
+/// Generic animated list parameter (like a list of vertices, integers etc).
 template<class T>
 struct AnimatedSimpleListParam: AnimatedParam<T> {
 	AnimatedSimpleListParam(const tchar *name):AnimatedParam<T>(name) {}
@@ -136,6 +146,7 @@ struct AnimatedSimpleListParam: AnimatedParam<T> {
 	}
 };
 
+/// Animated VectorList parameter. Used for vertices and normals.
 struct AnimatedVectorListParam: AnimatedSimpleListParam<VR::VectorList> {
 	AnimatedVectorListParam(const tchar *name):AnimatedSimpleListParam<VR::VectorList>(name) {}
 
@@ -152,6 +163,7 @@ struct AnimatedVectorListParam: AnimatedSimpleListParam<VR::VectorList> {
 	}
 };
 
+/// Animated IntList parameter. Used for faces and normals faces.
 struct AnimatedIntListParam: AnimatedSimpleListParam<VR::IntList> {
 	AnimatedIntListParam(const tchar *name):AnimatedSimpleListParam<VR::IntList>(name) {}
 
@@ -168,6 +180,7 @@ struct AnimatedIntListParam: AnimatedSimpleListParam<VR::IntList> {
 	}
 };
 
+/// Animated string list parameter.
 struct AnimatedStringListParam: AnimatedSimpleListParam<StringList> {
 	AnimatedStringListParam(const tchar *name):AnimatedSimpleListParam<StringList>(name) {}
 
@@ -184,6 +197,7 @@ struct AnimatedStringListParam: AnimatedSimpleListParam<StringList> {
 	}
 };
 
+/// Animated map channels parameter.
 /// Blatant copy of the DefMapChannelsParam; need to improve this in the V-Ray SDK.
 struct AnimatedMapChannelsParam: AnimatedParam<AbcMapChannelsList> {
 	/// Constructor.
@@ -403,6 +417,7 @@ struct GeomAlembicReader_Params: VR::VRayParameterListDesc {
 		addParamString("file", "", -1, "The source Alembic or .vrmesh file", "displayName=(Mesh File), fileAsset=(vrmesh;abc), fileAssetNames=(V-Ray Mesh;Alembic), fileAssetOp=(load)");
 		addParamString("mtl_defs_file", "", -1, "An optional .vrscene file with material definitions. If not specified, look for the materials in the current scene", "fileAsset=(vrscene), fileAssetNames=(V-Ray Scene), fileAssetOp=(load)");
 		addParamString("mtl_assignments_file", "", -1, "An optional XML file that controls material assignments", "fileAsset=(xml), fileAssetNames=(XML control file), fileAssetOp=(load)");
+		addParamInt("nsamples", 0, -1, "The number of motion blur steps (0 is from global settings");
 	}
 };
 
@@ -417,6 +432,7 @@ struct GeomAlembicReader: VR::VRayStaticGeomSource, VR::VRaySceneModifierInterfa
 		paramList->setParamCache("file", &fileName, true /* resolvePath */);
 		paramList->setParamCache("mtl_defs_file", &mtlDefsFileName, true /* resolvePath */);
 		paramList->setParamCache("mtl_assignments_file", &mtlAssignmentsFileName, true /* resolvePath */);
+		paramList->setParamCache("nsamples", &geomSamples);
 
 		plugman=NULL;
 	}
@@ -462,6 +478,7 @@ private:
 	VR::CharString fileName;
 	VR::CharString mtlDefsFileName;
 	VR::CharString mtlAssignmentsFileName;
+	int geomSamples;
 
 	/// A default material for shading objects without material assignment.
 	VR::VRayPlugin *defaultMtl;

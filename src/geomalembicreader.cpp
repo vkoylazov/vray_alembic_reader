@@ -302,12 +302,14 @@ void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 	if (unitsInfo) fps=unitsInfo->framesScale;
 	alembicFile->setFramesPerSecond(fps);
 
-	int nsamples=sdata.params.moblur.on? 5 : 1; // Number of motion blur samples.
+	int numTimeSamples=geomSamples;
+	if (!sdata.params.moblur.on) numTimeSamples=1; // No motion blur
+	else if (numTimeSamples==0) numTimeSamples=sdata.params.moblur.geomSamples; // Default samples.
 
 	// Motion blur params
 	AlembicParams abcParams;
-	abcParams.mbOn=sdata.params.moblur.on;
-	abcParams.mbTimeIndices=nsamples;
+	abcParams.mbOn=(numTimeSamples>1)? sdata.params.moblur.on : false;
+	abcParams.mbTimeIndices=numTimeSamples;
 	abcParams.mbDuration=sdata.params.moblur.duration;
 	abcParams.mbIntervalCenter=sdata.params.moblur.intervalCenter;
 
@@ -331,7 +333,7 @@ void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 		for (int i=0; i<numVoxels; i++) {
 			uint32 flags=alembicFile->getVoxelFlags(i);
 			if (flags & MVF_PREVIEW_VOXEL) {
-				MeshVoxel *previewVoxel=alembicFile->getVoxel(i, nsamples<<16, NULL, NULL);
+				MeshVoxel *previewVoxel=alembicFile->getVoxel(i, numTimeSamples<<16, NULL, NULL);
 				if (previewVoxel) {
 					VUtils::MeshChannel *mayaInfoChannel=previewVoxel->getChannel(MAYA_INFO_CHANNEL);
 					if (mayaInfoChannel) {
@@ -361,7 +363,7 @@ void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 				i,
 				true,
 				setsData,
-				nsamples,
+				numTimeSamples,
 				fdata.frameStart,
 				fdata.frameEnd,
 				fdata.t
