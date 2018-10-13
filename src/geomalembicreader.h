@@ -112,7 +112,7 @@ protected:
 
 		int res=0;
 		for (int i=0; i<keyframes.count(); i++) {
-			if (time>keyframes[i].time+1e-12f) {
+			if (time+1e-12f>keyframes[i].time) {
 				res=i;
 			} else {
 				break;
