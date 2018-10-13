@@ -9,13 +9,16 @@ struct GeomAlembicReaderInstance: VRayStaticGeometry {
 	GeomAlembicReaderInstance(GeomAlembicReader *abcReader):reader(abcReader) {
 	}
 
-	void compileGeometry(VR::VRayRenderer *vray, VR::TraceTransform *tm, double *times, int tmCount) {
+	void compileGeometry(VR::VRayRenderer *vray, const VR::Transform *_tm, double *_times, int _tmCount) VRAY_OVERRIDE {
 		createMeshInstances(renderID, NULL, NULL, Transform(1), objectID, userAttrs.ptr(), primaryVisibility);
 
-		double tmTime=vray->getFrameData().t;
+		const VRayFrameData &fdata=vray->getFrameData();
+
+		// Scratchpad arrays for computing transformation matrices
+		TransformsList transforms;
 
 		// Allocate memory for mesh transformations
-		Transform *tms=(Transform*) alloca(tmCount*sizeof(Transform));
+		// Transform *tms=(Transform*) alloca(tmCount*sizeof(Transform));
 
 		int numInstances=reader->meshInstances.count();
 		for (int i=0; i<numInstances; i++) {
@@ -24,15 +27,19 @@ struct GeomAlembicReaderInstance: VRayStaticGeometry {
 				continue;
 
 			// Compute the transformations for this mesh
-			for (int k=0; k<tmCount; k++) {
-				tms[k]=Transform(tm[k]*TraceTransform(abcInstance->tm));
-			}
+			double *times=&(abcInstance->times[0]);
+			
+			// Apply the transformation of the main alembic reader to the local transformations of the instances.
+			// Note that both may have a different number of time steps, so the blending is a bit more convoluted.
+			multiplyTransforms(transforms, abcInstance->tms, abcInstance->times, _tm, _times, _tmCount);
 
-			abcInstance->meshInstance->compileGeometry(vray, tms, times, tmCount);
+			vassert(transforms.count()==abcInstance->times.count());
+
+			abcInstance->meshInstance->compileGeometry(vray, &transforms[0], times, transforms.count());
 		}
 	}
 
-	void clearGeometry(VR::VRayRenderer *vray) {
+	void clearGeometry(VR::VRayRenderer *vray) VRAY_OVERRIDE {
 		int numInstances=reader->meshInstances.count();
 		for (int i=0; i<numInstances; i++) {
 			AlembicMeshInstance *abcInstance=reader->meshInstances[i];
@@ -44,7 +51,7 @@ struct GeomAlembicReaderInstance: VRayStaticGeometry {
 		deleteMeshInstances();
 	}
 
-	void updateMaterial(MaterialInterface *mtl, BSDFInterface *bsdf, int renderID, VolumetricInterface *volume, LightList *lightList, int objectID) {
+	void updateMaterial(MaterialInterface *mtl, BSDFInterface *bsdf, int renderID, VolumetricInterface *volume, LightList *lightList, int objectID) VRAY_OVERRIDE {
 		int numInstances=reader->meshInstances.count();
 		for (int i=0; i<numInstances; i++) {
 			AlembicMeshInstance *abcInstance=reader->meshInstances[i];
@@ -53,6 +60,28 @@ struct GeomAlembicReaderInstance: VRayStaticGeometry {
 
 			abcInstance->meshInstance->updateMaterial(mtl, bsdf, renderID, volume, lightList, objectID);
 		}
+	}
+
+	VRayShadeData* getShadeData(const VRayContext &rc) VRAY_OVERRIDE { return NULL; }
+	VRayShadeInstance* getShadeInstance(const VRayContext &rc) VRAY_OVERRIDE { return NULL; }
+
+	void setPrimaryVisibility(int onOff) { primaryVisibility=onOff; }
+	void setRenderID(int id) { renderID=id; }
+	void setObjectID(int id) { objectID=id; }
+	void setUserAttrs(const tchar *str) { userAttrs=str; }
+protected:
+	GeomAlembicReader *reader;
+	int primaryVisibility;
+	int renderID;
+	int objectID;
+	CharString userAttrs;
+
+	static MaterialInterface* getMaterial(VRayPlugin *mtl) {
+		return static_cast<MaterialInterface*>(GET_INTERFACE(mtl, EXT_MATERIAL));
+	}
+
+	static BSDFInterface* getBSDF(VRayPlugin *mtl) {
+		return static_cast<BSDFInterface*>(GET_INTERFACE(mtl, EXT_BSDF));
 	}
 
 	void createMeshInstances(int renderID, VolumetricInterface *volume, LightList *lightList, const Transform &baseTM, int objectID, const tchar *userAttr, int primaryVisibility) {
@@ -83,27 +112,51 @@ struct GeomAlembicReaderInstance: VRayStaticGeometry {
 		}
 	}
 
-	static MaterialInterface* getMaterial(VRayPlugin *mtl) {
-		return static_cast<MaterialInterface*>(GET_INTERFACE(mtl, EXT_MATERIAL));
+	/// Multiply an array of local transformations with an array of global transforms.
+	void multiplyTransforms(
+		TransformsList &result, ///< The result is stored here and has the same number of elements as localTransforms.
+		const TransformsList &localTransforms, ///< The list of local transforms.
+		const TimesList &localTimes, ///< The times when the local transforms were sampled, in increasing order.
+		const Transform *tms, ///< An array of global transforms.
+		double *times, ///< The times when the global transforms were sampled.
+		int tmCount ///< The number of global transforms.
+	) const {
+		int numLocalTMs=localTransforms.count();
+		result.setCount(numLocalTMs);
+		for (int i=0; i<numLocalTMs; i++) {
+			double localTime=localTimes[i];
+			result[i]=getInterpolatedTransform(tms, times, tmCount, localTime)*localTransforms[i];
+		}
 	}
 
-	static BSDFInterface* getBSDF(VRayPlugin *mtl) {
-		return static_cast<BSDFInterface*>(GET_INTERFACE(mtl, EXT_BSDF));
+	/// Intepolate a transform based on a list of keyframes and times.
+	/// @param tms The list of transform keyframes.
+	/// @param times The times when each keyframe was sampled.
+	/// @param tmCount The number of keyframes.
+	/// @param time The time at which we want to compute an interpolated transform.
+	Transform getInterpolatedTransform(const Transform *tms, double *times, int tmCount, double time) const {
+		if (tmCount==1)
+			return tms[0];
+
+		if (time<=times[0])
+			return tms[0];
+
+		if (time>=times[tmCount-1])
+			return tms[tmCount-1];
+
+		// Find the index of the transform for which (times[idx]<=time && time<times[idx+1])
+		int idx=0;
+		while (idx+1<tmCount && times[idx+1]<time) idx++;
+
+		// If we didn't find a proper time value, just return the last keyframe
+		if (idx+1==tmCount)
+			return tms[tmCount-1];
+
+		// Interpolate the transforms on either size of time. We use linear interpolation for simplicity.
+		float k=float((time-times[idx])/(times[idx+1]-times[idx]));
+		Transform res=tms[idx]*(1.0f-k)+tms[idx+1]*k;
+		return res;
 	}
-
-	VRayShadeData* getShadeData(const VRayContext &rc) { return NULL; }
-	VRayShadeInstance* getShadeInstance(const VRayContext &rc) { return NULL; }
-
-	void setPrimaryVisibility(int onOff) { primaryVisibility=onOff; }
-	void setRenderID(int id) { renderID=id; }
-	void setObjectID(int id) { objectID=id; }
-	void setUserAttrs(const tchar *str) { userAttrs=str; }
-protected:
-	GeomAlembicReader *reader;
-	int primaryVisibility;
-	int renderID;
-	int objectID;
-	CharString userAttrs;
 };
 
 //*************************************************************
@@ -225,6 +278,7 @@ void GeomAlembicReader::deletePlugin(VRayPlugin *plugin) {
 
 void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 	VRaySequenceData &sdata=vray->getSequenceDataNoConst();
+	const VRayFrameData &fdata=vray->getFrameData();
 
 	const tchar *fname=fileName.ptr();
 	if (!fname) fname="";
@@ -248,10 +302,14 @@ void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 	if (unitsInfo) fps=unitsInfo->framesScale;
 	alembicFile->setFramesPerSecond(fps);
 
+	int numTimeSamples=geomSamples;
+	if (!sdata.params.moblur.on) numTimeSamples=1; // No motion blur
+	else if (numTimeSamples==0) numTimeSamples=sdata.params.moblur.geomSamples; // Default samples.
+
 	// Motion blur params
 	AlembicParams abcParams;
-	abcParams.mbOn=sdata.params.moblur.on;
-	abcParams.mbTimeIndices=sdata.params.moblur.geomSamples-1;
+	abcParams.mbOn=(numTimeSamples>1)? sdata.params.moblur.on : false;
+	abcParams.mbTimeIndices=numTimeSamples;
 	abcParams.mbDuration=sdata.params.moblur.duration;
 	abcParams.mbIntervalCenter=sdata.params.moblur.intervalCenter;
 
@@ -264,7 +322,8 @@ void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 			sdata.progress->error("Cannot initialize file \"%s\": %s", fname, errStr.ptr());
 		}
 	} else {
-		alembicFile->setCurrentFrame(float(frameNumber));
+		float time=float(frameNumber);
+		alembicFile->setCurrentFrame(time);
 
 		int numVoxels=alembicFile->getNumVoxels();
 
@@ -274,7 +333,7 @@ void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 		for (int i=0; i<numVoxels; i++) {
 			uint32 flags=alembicFile->getVoxelFlags(i);
 			if (flags & MVF_PREVIEW_VOXEL) {
-				MeshVoxel *previewVoxel=alembicFile->getVoxel(i);
+				MeshVoxel *previewVoxel=alembicFile->getVoxel(i, numTimeSamples<<16, NULL, NULL);
 				if (previewVoxel) {
 					VUtils::MeshChannel *mayaInfoChannel=previewVoxel->getChannel(MAYA_INFO_CHANNEL);
 					if (mayaInfoChannel) {
@@ -297,17 +356,21 @@ void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 			if (0!=(flags & MVF_INSTANCE_VOXEL)) // We are only interested in the source meshes here, we deal with instances separately
 				continue;
 
-			MeshVoxel *voxel=alembicFile->getVoxel(i);
-			if (!voxel)
-				continue;
-
 			// Create a GeomStaticMesh plugin for this voxel
-			AlembicMeshSource *abcMeshSource=createGeomStaticMesh(vray, *alembicFile, *voxel, true, setsData);
+			AlembicMeshSource *abcMeshSource=createGeomStaticMesh(
+				vray,
+				*alembicFile,
+				i,
+				true,
+				setsData,
+				numTimeSamples,
+				fdata.frameStart,
+				fdata.frameEnd,
+				fdata.t
+			);
 			if (abcMeshSource) {
 				meshSources+=abcMeshSource;
 			}
-
-			alembicFile->releaseVoxel(voxel);
 		}
 	}
 
@@ -336,12 +399,30 @@ void GeomAlembicReader::unloadGeometry(VRayRenderer *vray) {
 	meshSources.clear();
 }
 
-VRayPlugin * GeomAlembicReader::createDefaultMaterial(void) {
+VRayPlugin* GeomAlembicReader::createDefaultMaterial(void) {
+	Transform uvwTransform(
+		Matrix(
+			Vector(5.0f, 0.0f, 0.0f),
+			Vector(0.0f, 5.0f, 0.0f),
+			Vector(0.0f, 0.0f, 5.0f)
+		),
+		Vector(0.0f, 0.0f, 0.0f)
+	);
+
+	VRayPlugin *uvwgenPlugin=newPlugin("UVWGenChannel", "uvwgen");
+	int res=uvwgenPlugin->setParameter(factory.saveInFactory(new DefTransformParam("uvw_transform", uvwTransform)));
+	res=uvwgenPlugin->setParameter(factory.saveInFactory(new DefIntParam("uvw_channel", 0)));
+
+	VRayPlugin *checkerPlugin=newPlugin("TexChecker", "checker");
+	res=checkerPlugin->setParameter(factory.saveInFactory(new DefPluginParam("uvwgen", uvwgenPlugin)));
+	res=checkerPlugin->setParameter(factory.saveInFactory(new DefColorParam("white_color", Color(0.8f, 0.5f, 0.2f))));
+	res=checkerPlugin->setParameter(factory.saveInFactory(new DefColorParam("black_color", Color(0.2f, 0.5f, 0.8f))));
+
 	VRayPlugin *brdfPlugin=newPlugin("BRDFDiffuse", "diffuse");
-	brdfPlugin->setParameter(factory.saveInFactory(new DefColorParam("color", Color(1.0f, 0.0f, 0.0f))));
+	res=brdfPlugin->setParameter(factory.saveInFactory(new DefPluginParam("color_tex", checkerPlugin)));
 
 	VRayPlugin *mtlPlugin=newPlugin("MtlSingleBRDF", "diffuseMtl");
-	mtlPlugin->setParameter(factory.saveInFactory(new DefPluginParam("brdf", brdfPlugin)));
+	res=mtlPlugin->setParameter(factory.saveInFactory(new DefPluginParam("brdf", brdfPlugin)));
 
 	return mtlPlugin;
 }
