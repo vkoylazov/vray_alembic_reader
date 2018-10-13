@@ -81,6 +81,11 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(
 	meshPlugin->setParameter(&abcMeshSource->dynamicGeometryParam);
 	meshPlugin->setParameter(&abcMeshSource->verticesParam);
 	meshPlugin->setParameter(&abcMeshSource->facesParam);
+	meshPlugin->setParameter(&abcMeshSource->mapChannelsParam);
+	meshPlugin->setParameter(&abcMeshSource->normalsParam);
+	meshPlugin->setParameter(&abcMeshSource->faceNormalsParam);
+	meshPlugin->setParameter(&abcMeshSource->mapChannelNamesParam);
+	meshPlugin->setParameter(&abcMeshSource->velocitiesParam);
 
 	abcMeshSource->setNumTimeSteps(nsamples);
 
@@ -150,9 +155,6 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(
 				paramFaceNormals[idx+2]=face.v[2];
 			}
 			abcMeshSource->faceNormalsParam.addKeyframe(time, paramFaceNormals);
-
-			meshPlugin->setParameter(&abcMeshSource->normalsParam);
-			meshPlugin->setParameter(&abcMeshSource->faceNormalsParam);
 		}
 
 		// Read the UV/color sets
@@ -201,8 +203,6 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(
 				}
 			}
 
-			meshPlugin->setParameter(&abcMeshSource->mapChannelsParam);
-
 			// Fill in the mapping channel names
 			StringList &mapChannelNames=abcMeshSource->mapChannelNamesParam.addKeyframe(time);
 
@@ -216,8 +216,6 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(
 				if (NULL==setName) setName="";
 				mapChannelNames[i]=setName;
 			}
-
-			meshPlugin->setParameter(&abcMeshSource->mapChannelNamesParam);
 		}
 
 		// If motion blur is enabled, read the vertex velocities and set them into the velocitiesParam
@@ -230,8 +228,6 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(
 					velParam[i]=velocities[i];
 				}
 				abcMeshSource->velocitiesParam.addKeyframe(time, velParam);
-
-				meshPlugin->setParameter(&abcMeshSource->velocitiesParam);
 			}
 		}
 	}
