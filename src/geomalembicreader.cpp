@@ -251,7 +251,7 @@ void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 	if (unitsInfo) fps=unitsInfo->framesScale;
 	alembicFile->setFramesPerSecond(fps);
 
-	int nsamples=5; // Number of motion blur samples.
+	int nsamples=sdata.params.moblur.on? 5 : 1; // Number of motion blur samples.
 
 	// Motion blur params
 	AlembicParams abcParams;
