@@ -346,12 +346,30 @@ void GeomAlembicReader::unloadGeometry(VRayRenderer *vray) {
 	meshSources.clear();
 }
 
-VRayPlugin * GeomAlembicReader::createDefaultMaterial(void) {
+VRayPlugin* GeomAlembicReader::createDefaultMaterial(void) {
+	Transform uvwTransform(
+		Matrix(
+			Vector(5.0f, 0.0f, 0.0f),
+			Vector(0.0f, 5.0f, 0.0f),
+			Vector(0.0f, 0.0f, 5.0f)
+		),
+		Vector(0.0f, 0.0f, 0.0f)
+	);
+
+	VRayPlugin *uvwgenPlugin=newPlugin("UVWGenChannel", "uvwgen");
+	int res=uvwgenPlugin->setParameter(factory.saveInFactory(new DefTransformParam("uvw_transform", uvwTransform)));
+	res=uvwgenPlugin->setParameter(factory.saveInFactory(new DefIntParam("uvw_channel", 0)));
+
+	VRayPlugin *checkerPlugin=newPlugin("TexChecker", "checker");
+	res=checkerPlugin->setParameter(factory.saveInFactory(new DefPluginParam("uvwgen", uvwgenPlugin)));
+	res=checkerPlugin->setParameter(factory.saveInFactory(new DefColorParam("white_color", Color(0.8f, 0.5f, 0.2f))));
+	res=checkerPlugin->setParameter(factory.saveInFactory(new DefColorParam("black_color", Color(0.2f, 0.5f, 0.8f))));
+
 	VRayPlugin *brdfPlugin=newPlugin("BRDFDiffuse", "diffuse");
-	brdfPlugin->setParameter(factory.saveInFactory(new DefColorParam("color", Color(1.0f, 0.0f, 0.0f))));
+	res=brdfPlugin->setParameter(factory.saveInFactory(new DefPluginParam("color_tex", checkerPlugin)));
 
 	VRayPlugin *mtlPlugin=newPlugin("MtlSingleBRDF", "diffuseMtl");
-	mtlPlugin->setParameter(factory.saveInFactory(new DefPluginParam("brdf", brdfPlugin)));
+	res=mtlPlugin->setParameter(factory.saveInFactory(new DefPluginParam("brdf", brdfPlugin)));
 
 	return mtlPlugin;
 }
