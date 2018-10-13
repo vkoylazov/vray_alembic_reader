@@ -133,8 +133,7 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(
 
 		// Read the normals and set them into the normalsParam and faceNormalsParam
 		const MeshChannel *normalsChannel=voxel->getChannel(VERT_NORMAL_CHANNEL);
-		const MeshChannel *faceNormalsChannel=voxel->getChannel(VERT_NORMAL_TOPO_CHANNEL);
-		if (normalsChannel && faceNormalsChannel) {
+		if (normalsChannel) {
 			const VertGeomData *normals=static_cast<VertGeomData*>(normalsChannel->data);
 			int numNormals=normalsChannel->numElements;
 			VR::VectorList paramNormals(numNormals);
@@ -142,7 +141,10 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(
 				paramNormals[i]=normals[i];
 			}
 			abcMeshSource->normalsParam.addKeyframe(time, paramNormals);
+		}
 
+		const MeshChannel *faceNormalsChannel=voxel->getChannel(VERT_NORMAL_TOPO_CHANNEL);
+		if (faceNormalsChannel) {
 			const FaceTopoData *faceNormals=static_cast<FaceTopoData*>(faceNormalsChannel->data);
 			int numFaceNormals=faceNormalsChannel->numElements;
 			VR::IntList paramFaceNormals(numFaceNormals*3);
