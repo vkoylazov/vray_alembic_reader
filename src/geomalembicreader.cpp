@@ -14,6 +14,9 @@ struct GeomAlembicReaderInstance: VRayStaticGeometry {
 
 		const VRayFrameData &fdata=vray->getFrameData();
 
+		// Scratchpad arrays for computing transformation matrices
+		TransformsList transforms;
+
 		// Allocate memory for mesh transformations
 		// Transform *tms=(Transform*) alloca(tmCount*sizeof(Transform));
 
@@ -24,13 +27,15 @@ struct GeomAlembicReaderInstance: VRayStaticGeometry {
 				continue;
 
 			// Compute the transformations for this mesh
-			const VR::Transform *tms=&(abcInstance->tms[0]);
-			int tmCount=abcInstance->tms.count();
 			double *times=&(abcInstance->times[0]);
+			
+			// Apply the transformation of the main alembic reader to the local transformations of the instances.
+			// Note that both may have a different number of time steps, so the blending is a bit more convoluted.
+			multiplyTransforms(transforms, abcInstance->tms, abcInstance->times, _tm, _times, _tmCount);
 
-			vassert(abcInstance->tms.count()==abcInstance->times.count());
+			vassert(transforms.count()==abcInstance->times.count());
 
-			abcInstance->meshInstance->compileGeometry(vray, tms, times, tmCount);
+			abcInstance->meshInstance->compileGeometry(vray, &transforms[0], times, transforms.count());
 		}
 	}
 
@@ -105,6 +110,52 @@ protected:
 			geom->deleteInstance(abcInstance->meshInstance);
 			abcInstance->meshInstance=NULL;
 		}
+	}
+
+	/// Multiply an array of local transformations with an array of global transforms.
+	void multiplyTransforms(
+		TransformsList &result, ///< The result is stored here and has the same number of elements as localTransforms.
+		const TransformsList &localTransforms, ///< The list of local transforms.
+		const TimesList &localTimes, ///< The times when the local transforms were sampled, in increasing order.
+		const Transform *tms, ///< An array of global transforms.
+		double *times, ///< The times when the global transforms were sampled.
+		int tmCount ///< The number of global transforms.
+	) const {
+		int numLocalTMs=localTransforms.count();
+		result.setCount(numLocalTMs);
+		for (int i=0; i<numLocalTMs; i++) {
+			double localTime=localTimes[i];
+			result[i]=getInterpolatedTransform(tms, times, tmCount, localTime)*localTransforms[i];
+		}
+	}
+
+	/// Intepolate a transform based on a list of keyframes and times.
+	/// @param tms The list of transform keyframes.
+	/// @param times The times when each keyframe was sampled.
+	/// @param tmCount The number of keyframes.
+	/// @param time The time at which we want to compute an interpolated transform.
+	Transform getInterpolatedTransform(const Transform *tms, double *times, int tmCount, double time) const {
+		if (tmCount==1)
+			return tms[0];
+
+		if (time<=times[0])
+			return tms[0];
+
+		if (time>=times[tmCount-1])
+			return tms[tmCount-1];
+
+		// Find the index of the transform for which (times[idx]<=time && time<times[idx+1])
+		int idx=0;
+		while (idx+1<tmCount && times[idx+1]<time) idx++;
+
+		// If we didn't find a proper time value, just return the last keyframe
+		if (idx+1==tmCount)
+			return tms[tmCount-1];
+
+		// Interpolate the transforms on either size of time. We use linear interpolation for simplicity.
+		float k=float((time-times[idx])/(times[idx+1]-times[idx]));
+		Transform res=tms[idx]*(1.0f-k)+tms[idx+1]*k;
+		return res;
 	}
 };
 
