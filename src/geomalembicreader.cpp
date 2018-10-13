@@ -9,13 +9,13 @@ struct GeomAlembicReaderInstance: VRayStaticGeometry {
 	GeomAlembicReaderInstance(GeomAlembicReader *abcReader):reader(abcReader) {
 	}
 
-	void compileGeometry(VR::VRayRenderer *vray, const VR::Transform *tm, double *times, int tmCount) VRAY_OVERRIDE {
+	void compileGeometry(VR::VRayRenderer *vray, const VR::Transform *_tm, double *_times, int _tmCount) VRAY_OVERRIDE {
 		createMeshInstances(renderID, NULL, NULL, Transform(1), objectID, userAttrs.ptr(), primaryVisibility);
 
-		double tmTime=vray->getFrameData().t;
+		const VRayFrameData &fdata=vray->getFrameData();
 
 		// Allocate memory for mesh transformations
-		Transform *tms=(Transform*) alloca(tmCount*sizeof(Transform));
+		// Transform *tms=(Transform*) alloca(tmCount*sizeof(Transform));
 
 		int numInstances=reader->meshInstances.count();
 		for (int i=0; i<numInstances; i++) {
@@ -24,9 +24,11 @@ struct GeomAlembicReaderInstance: VRayStaticGeometry {
 				continue;
 
 			// Compute the transformations for this mesh
-			for (int k=0; k<tmCount; k++) {
-				tms[k]=(tm[k]*abcInstance->tm);
-			}
+			const VR::Transform *tms=&(abcInstance->tms[0]);
+			int tmCount=abcInstance->tms.count();
+			double *times=&(abcInstance->times[0]);
+
+			vassert(abcInstance->tms.count()==abcInstance->times.count());
 
 			abcInstance->meshInstance->compileGeometry(vray, tms, times, tmCount);
 		}
@@ -278,7 +280,7 @@ void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 		for (int i=0; i<numVoxels; i++) {
 			uint32 flags=alembicFile->getVoxelFlags(i);
 			if (flags & MVF_PREVIEW_VOXEL) {
-				MeshVoxel *previewVoxel=alembicFile->getVoxel(i);
+				MeshVoxel *previewVoxel=alembicFile->getVoxel(i, nsamples<<16, NULL, NULL);
 				if (previewVoxel) {
 					VUtils::MeshChannel *mayaInfoChannel=previewVoxel->getChannel(MAYA_INFO_CHANNEL);
 					if (mayaInfoChannel) {
@@ -302,7 +304,17 @@ void GeomAlembicReader::loadGeometry(int frameNumber, VRayRenderer *vray) {
 				continue;
 
 			// Create a GeomStaticMesh plugin for this voxel
-			AlembicMeshSource *abcMeshSource=createGeomStaticMesh(vray, *alembicFile, i, true, setsData, nsamples, fdata.frameStart, fdata.frameEnd);
+			AlembicMeshSource *abcMeshSource=createGeomStaticMesh(
+				vray,
+				*alembicFile,
+				i,
+				true,
+				setsData,
+				nsamples,
+				fdata.frameStart,
+				fdata.frameEnd,
+				fdata.t
+			);
 			if (abcMeshSource) {
 				meshSources+=abcMeshSource;
 			}

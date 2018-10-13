@@ -375,10 +375,14 @@ struct AlembicMeshSource {
 	}
 };
 
+typedef VR::Table<VR::Transform, -1> TransformsList;
+typedef VR::Table<double, -1> TimesList;
+
 /// Information about an instance of an AlembicMeshSource.
 struct AlembicMeshInstance {
 	AlembicMeshSource *meshSource; ///< The original mesh.
-	VR::Transform tm; ///< The transformation matrix.
+	TransformsList tms; ///< The transformation matrices for each time sample.
+	TimesList times; ///< The times at which the transformation matrices were sampled.
 	VR::CharString abcName; ///< The full Alembic name of this instance from the Alembic file.
 
 	VR::VRayStaticGeometry *meshInstance; ///< The instance returned from the GeomStaticMesh object.
@@ -496,7 +500,17 @@ private:
 	/// @param createInstance true to also create an AlembicMeshInstance object for the mesh and add it to the meshInstances table.
 	/// @param meshSets Information about the UV and color sets in the Alembic file. Used to fill in the names of the mapping channels.
 	/// @retval The resulting AlembicMeshSource object. May be NULL if the object cannot be created.
-	AlembicMeshSource *createGeomStaticMesh(VR::VRayRenderer *vray, VR::MeshFile &abcFile, int voxelIndex, int createInstance, VR::DefaultMeshSetsData &meshSets, int nsamples, double frameStart, double frameEnd);
+	AlembicMeshSource *createGeomStaticMesh(
+		VR::VRayRenderer *vray,
+		VR::MeshFile &abcFile,
+		int voxelIndex,
+		int createInstance,
+		VR::DefaultMeshSetsData &meshSets,
+		int nsamples,
+		double frameStart,
+		double frameEnd,
+		double frameTime
+	);
 
 	/// Create a default material to use for shading when no material assignment is found for an object.
 	VRayPlugin* createDefaultMaterial(void);

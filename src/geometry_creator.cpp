@@ -27,7 +27,17 @@ struct MeshVoxelGuardRAII {
 	}
 };
 
-AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, MeshFile &abcFile, int voxelIndex, int createInstance, DefaultMeshSetsData &meshSets, int nsamples, double frameStart, double frameEnd) {
+AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(
+	VRayRenderer *vray,
+	MeshFile &abcFile,
+	int voxelIndex,
+	int createInstance,
+	DefaultMeshSetsData &meshSets,
+	int nsamples,
+	double frameStart,
+	double frameEnd,
+	double frameTime
+) {
 	MeshVoxel *voxel=abcFile.getVoxel(voxelIndex, nsamples<<16, NULL, NULL);
 	if (!voxel)
 		return NULL;
@@ -59,17 +69,11 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 	if (!meshPlugin)
 		return NULL;
 
-	const MeshChannel *vertsChannel=voxel->getChannel(VERT_GEOM_CHANNEL);
-	const MeshChannel *facesChannel=voxel->getChannel(FACE_TOPO_CHANNEL);
+	TransformsList vertexTransforms;
+	vertexTransforms.setCount(nsamples);
 
-	if (!vertsChannel || !vertsChannel->data || !facesChannel || !facesChannel->data)
-		return NULL;
-
-	const VertGeomData *verts=static_cast<VertGeomData*>(vertsChannel->data);
-	const FaceTopoData *faces=static_cast<FaceTopoData*>(facesChannel->data);
-
-	Transform vertexTransform(1);
-	int hasTransform=voxel->getTM(vertexTransform);
+	TimesList times;
+	times.setCount(nsamples);
 
 	AlembicMeshSource *abcMeshSource=new AlembicMeshSource;
 	abcMeshSource->geomStaticMesh=meshPlugin;
@@ -81,7 +85,9 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 	abcMeshSource->setNumTimeSteps(nsamples);
 
 	for (int i=0; i<nsamples; i++) {
-		float time=float(frameStart+(frameEnd-frameStart)*i/double(nsamples-1));
+		double time=(nsamples>1)? (frameStart+(frameEnd-frameStart)*i/double(nsamples-1)) : frameTime;
+		vertexTransforms[i].makeIdentity();
+		times[i]=time;
 
 		if (i>0) {
 			int timeFlags=i|(nsamples<<16);
@@ -92,7 +98,12 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 		if (!voxel)
 			continue;
 
+		// Set the transformation matrix
+		voxel->getTM(vertexTransforms[i]);
+
 		// Read the vertices and set them into the verticesParam
+		const MeshChannel *vertsChannel=voxel->getChannel(VERT_GEOM_CHANNEL);
+		const VertGeomData *verts=static_cast<VertGeomData*>(vertsChannel->data);
 		int numVerts=vertsChannel->numElements;
 		VR::VectorList paramVerts(numVerts);
 		for (int i=0; i<numVerts; i++) {
@@ -101,6 +112,8 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 		abcMeshSource->verticesParam.addKeyframe(time, paramVerts);
 
 		// Read the faces and set them into the facesParam
+		const MeshChannel *facesChannel=voxel->getChannel(FACE_TOPO_CHANNEL);
+		const FaceTopoData *faces=static_cast<FaceTopoData*>(facesChannel->data);
 		int numFaces=facesChannel->numElements;
 		VR::IntList paramFaces(numFaces*3);
 		for (int i=0; i<numFaces; i++) {
@@ -218,11 +231,9 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 				}
 				abcMeshSource->velocitiesParam.addKeyframe(time, velParam);
 
-				meshPlugin->setParameter(&abcMeshSource->velocitiesParam);		
+				meshPlugin->setParameter(&abcMeshSource->velocitiesParam);
 			}
 		}
-
-		abcFile.releaseVoxel(voxel);
 	}
 
 	if (createInstance) {
@@ -230,7 +241,8 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(VRayRenderer *vray, M
 
 		abcMeshInstance->meshIndex=meshInstances.count();
 		abcMeshInstance->meshSource=abcMeshSource;
-		abcMeshInstance->tm=vertexTransform;
+		abcMeshInstance->tms.copy(vertexTransforms);
+		abcMeshInstance->times.copy(times);
 		abcMeshInstance->abcName=strID.str;
 
 		meshInstances+=abcMeshInstance;
