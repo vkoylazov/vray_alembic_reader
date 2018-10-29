@@ -78,6 +78,11 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(
 	AlembicMeshSource *abcMeshSource=new AlembicMeshSource;
 	abcMeshSource->geomStaticMesh=meshPlugin;
 
+	// true if we want to read velocity information and false to just sample positions.
+	// Note that the Alembic reader inside the MeshFile implementation may still internally use
+	// velocity information from the Alembic file to interpolate positions.
+	int useVelocity=true;
+
 	meshPlugin->setParameter(&abcMeshSource->dynamicGeometryParam);
 	meshPlugin->setParameter(&abcMeshSource->verticesParam);
 	meshPlugin->setParameter(&abcMeshSource->facesParam);
@@ -85,7 +90,9 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(
 	meshPlugin->setParameter(&abcMeshSource->normalsParam);
 	meshPlugin->setParameter(&abcMeshSource->faceNormalsParam);
 	meshPlugin->setParameter(&abcMeshSource->mapChannelNamesParam);
-	meshPlugin->setParameter(&abcMeshSource->velocitiesParam);
+	if (useVelocity) {
+		meshPlugin->setParameter(&abcMeshSource->velocitiesParam);
+	}
 
 	abcMeshSource->setNumTimeSteps(nsamples);
 
@@ -221,7 +228,7 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(
 		}
 
 		// If motion blur is enabled, read the vertex velocities and set them into the velocitiesParam
-		if (vray->getSequenceData().params.moblur.on) {
+		if (useVelocity && vray->getSequenceData().params.moblur.on) {
 			const MeshChannel *velocitiesChannel=voxel->getChannel(VERT_VELOCITY_CHANNEL);
 			if (velocitiesChannel && velocitiesChannel->data && velocitiesChannel->numElements==numVerts) {
 				const VertGeomData *velocities=static_cast<VertGeomData*>(velocitiesChannel->data);
