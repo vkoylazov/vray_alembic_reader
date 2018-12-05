@@ -401,7 +401,7 @@ struct AlembicMeshSource {
 		displSubdivEdgeLengthParam("edge_length", 4.0f),
 		useGlobalsParam("use_globals", false),
 		maxSubdivLevelsParam("max_subdivs", 256),
-		displTextureParam("displacement_tex_float", nullptr),
+		displTextureParam("displacement_tex_color", nullptr),
 		displAmountParam("displacement_amount", 0.0f),
 		nsamples(1)
 	{}
