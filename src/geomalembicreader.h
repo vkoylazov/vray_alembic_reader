@@ -339,9 +339,20 @@ protected:
 	int level;
 };
 
+/// A structure with parameters for displacement/subdivision
+struct DisplacementSubdivParams {
+	VR::VRayPlugin *displacementTex; ///< The displacement texture.
+	float displacementAmount; ///< The displacement amount.
+	int hasSubdivision; ///< true to subdivide the object.
+
+	/// Constructor.
+	DisplacementSubdivParams(void): displacementTex(nullptr), hasSubdivision(false), displacementAmount(0.0f) {}
+};
+
 /// Information about a GeomStaticMesh plugin created for each object from the Alembic file.
 struct AlembicMeshSource {
 	VR::VRayPlugin *geomStaticMesh; ///< The GeomStaticMesh plugin.
+	VR::VRayPlugin *displSubdivPlugin; ///< Plugin for subdivision/displacement that wraps the mesh plugin.
 
 	AnimatedVectorListParam verticesParam; ///< The parameter for the vertices.
 	AnimatedIntListParam facesParam; ///< The parameter for the faces.
@@ -361,19 +372,37 @@ struct AlembicMeshSource {
 	/// can be optimized.
 	VR::DefBoolParam dynamicGeometryParam;
 
+	VR::DefPluginParam displSubdivSourceMeshParam; ///< The parameter with the source mesh plugin for displSubdivPlugin.
+	VR::DefBoolParam preTesselateDisplParam; ///< Parameter that specifies whether to pre-tessellate displacement.
+	VR::DefBoolParam preTesselateSubdivParam; ///< Parameter that specifies whether to pre-tesselate subdivision.
+	VR::DefFloatParam displSubdivEdgeLengthParam; ///< Edge length for view-dependent displacement/subdivision.
+	VR::DefBoolParam useGlobalsParam; ///< Parameter to disable usage of global displacement settings.
+	VR::DefIntParam maxSubdivLevelsParam; ///< Parameter for the maximum subdivision along a face edge for displacement/subdivision.
+	VR::DefPluginParam displTextureParam; ///< The displacement texture.
+	VR::DefFloatParam displAmountParam; ///< The displacement amount parameter.
+
 	int nsamples; ///< Number of time samples.
 
 	/// Constructor.
 	AlembicMeshSource(void):
+		geomStaticMesh(nullptr),
+		displSubdivPlugin(nullptr),
 		verticesParam("vertices"),
 		facesParam("faces"),
 		normalsParam("normals"),
 		faceNormalsParam("faceNormals"),
 		velocitiesParam("velocities"),
-		geomStaticMesh(NULL),
 		mapChannelsParam("map_channels"),
 		mapChannelNamesParam("map_channels_names"),
 		dynamicGeometryParam("dynamic_geometry", true),
+		displSubdivSourceMeshParam("mesh", nullptr),
+		preTesselateDisplParam("static_displacement", true),
+		preTesselateSubdivParam("static_subdiv", true),
+		displSubdivEdgeLengthParam("edge_length", 4.0f),
+		useGlobalsParam("use_globals", false),
+		maxSubdivLevelsParam("max_subdivs", 256),
+		displTextureParam("displacement_tex_float", nullptr),
+		displAmountParam("displacement_amount", 0.0f),
 		nsamples(1)
 	{}
 
@@ -386,6 +415,15 @@ struct AlembicMeshSource {
 		velocitiesParam.reserveKeyframes(nsamples);
 		mapChannelsParam.reserveKeyframes(nsamples);
 		mapChannelNamesParam.reserveKeyframes(nsamples);
+	}
+
+	/// Return the plugin that generates geometry for this object. This is either
+	/// the displSubdivPlugin if there is subdivision/displacement, or just the geomStaticMesh plugin.
+	VR::VRayPlugin* getGeomPlugin(void) const {
+		if (displSubdivPlugin)
+			return displSubdivPlugin;
+
+		return geomStaticMesh;
 	}
 };
 
@@ -549,6 +587,9 @@ private:
 	/// The material assignment rules extracted from controlFileXML
 	MtlAssignmentRulesTable mtlAssignments;
 
-	/// Return the material plugin to use for the given Alembic file name
+	/// Return the material plugin to use for the given Alembic file name.
 	VR::VRayPlugin* getMaterialPluginForInstance(const VR::CharString &abcName);
+
+	/// Return the displacement and subdivision parameters for the given Alembic object file name.
+	void getDisplacementSubdivParams(const VR::CharString &abcName, DisplacementSubdivParams &params);
 };

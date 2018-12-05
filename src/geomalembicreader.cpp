@@ -91,7 +91,9 @@ protected:
 			if (!abcInstance)
 				continue;
 
-			StaticGeomSourceInterface *geom=static_cast<StaticGeomSourceInterface*>(GET_INTERFACE(abcInstance->meshSource->geomStaticMesh, EXT_STATIC_GEOM_SOURCE));
+			VRayPlugin *geomPlugin=abcInstance->meshSource->getGeomPlugin();
+
+			StaticGeomSourceInterface *geom=static_cast<StaticGeomSourceInterface*>(GET_INTERFACE(geomPlugin, EXT_STATIC_GEOM_SOURCE));
 			if (geom) {
 				VRayPlugin *mtlPlugin=reader->getMaterialPluginForInstance(abcInstance->abcName);
 				abcInstance->meshInstance=geom->newInstance(getMaterial(mtlPlugin), getBSDF(mtlPlugin), renderID, NULL, lightList, baseTM, objectID, userAttr, primaryVisibility);
@@ -106,7 +108,9 @@ protected:
 			if (!abcInstance || !abcInstance->meshInstance)
 				continue;
 
-			StaticGeomSourceInterface *geom=static_cast<StaticGeomSourceInterface*>(GET_INTERFACE(abcInstance->meshSource->geomStaticMesh, EXT_STATIC_GEOM_SOURCE));
+			VRayPlugin *geomPlugin=abcInstance->meshSource->getGeomPlugin();
+
+			StaticGeomSourceInterface *geom=static_cast<StaticGeomSourceInterface*>(GET_INTERFACE(geomPlugin, EXT_STATIC_GEOM_SOURCE));
 			geom->deleteInstance(abcInstance->meshInstance);
 			abcInstance->meshInstance=NULL;
 		}
@@ -391,8 +395,15 @@ void GeomAlembicReader::unloadGeometry(VRayRenderer *vray) {
 		if (!abcMeshSource)
 			continue;
 
-		deletePlugin(abcMeshSource->geomStaticMesh);
-		abcMeshSource->geomStaticMesh=NULL;
+		if (abcMeshSource->displSubdivPlugin) {
+			deletePlugin(abcMeshSource->displSubdivPlugin);
+			abcMeshSource->displSubdivPlugin=nullptr;
+		}
+
+		if (abcMeshSource->geomStaticMesh) {
+			deletePlugin(abcMeshSource->geomStaticMesh);
+			abcMeshSource->geomStaticMesh=nullptr;
+		}
 		delete abcMeshSource;
 	}
 
@@ -496,3 +507,9 @@ VRayPlugin* GeomAlembicReader::getMaterialPluginForInstance(const CharString &ab
 
 	return res;
 }
+
+void GeomAlembicReader::getDisplacementSubdivParams(const VR::CharString &abcName, DisplacementSubdivParams &params) {
+	params.displacementTex=mtlAssignments.getDisplacementTexturePlugin(abcName, params.displacementAmount);
+	params.hasSubdivision=mtlAssignments.getSubdivisionEnabled(abcName);
+}
+

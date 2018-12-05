@@ -15,10 +15,12 @@ The XML file with the material assignment rules has the following format:
   <patternRule>
     <pattern>/pTorus/*</pattern>
     <material>orangeMtl</material>
+    <displacement amount="5.0">displTex1</displacement>
   </patternRule>
   <patternRule>
     <pattern>*</pattern>
     <material>checkerMtl</material>
+    <subdivision>1</subdivision>
   </patternRule>
   ...
 </materialAssignmentsRules>

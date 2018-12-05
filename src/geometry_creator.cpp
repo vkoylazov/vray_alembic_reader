@@ -67,7 +67,7 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(
 
 	VRayPlugin *meshPlugin=newPlugin("GeomStaticMesh", meshPluginName);
 	if (!meshPlugin)
-		return NULL;
+		return nullptr;
 
 	TransformsList vertexTransforms;
 	vertexTransforms.setCount(nsamples);
@@ -240,6 +240,52 @@ AlembicMeshSource* GeomAlembicReader::createGeomStaticMesh(
 			}
 		}
 	}
+
+	// Check if the object should have displacement/subdivision
+	DisplacementSubdivParams displSubdivParams;
+	getDisplacementSubdivParams(strID.str, displSubdivParams);
+
+	VRayPlugin *displSubdivPlugin=nullptr;
+
+	// Create displacement/subvision plugin as needed and set specific parameters.
+	if (displSubdivParams.hasSubdivision) {
+		// Subdivision
+		vutils_strcat_n(meshPluginName, "@subdiv", COUNT_OF(meshPluginName));
+		displSubdivPlugin=newPlugin("GeomStaticSmoothedMesh", meshPluginName);
+		if (displSubdivPlugin) {
+			displSubdivPlugin->setParameter(&abcMeshSource->preTesselateSubdivParam);
+		}
+	} else if (displSubdivParams.displacementTex) {
+		// Only displacement
+		vutils_strcat_n(meshPluginName, "@displ", COUNT_OF(meshPluginName));
+		displSubdivPlugin=newPlugin("GeomDisplacedMesh", meshPluginName);
+		if (displSubdivPlugin) {
+			displSubdivPlugin->setParameter(&abcMeshSource->preTesselateDisplParam);
+		}
+	}
+
+	// Set the general displacement/subdivision parameters as needed.
+	if (displSubdivPlugin) {
+		// Set the source mesh plugin.
+		abcMeshSource->displSubdivSourceMeshParam.setUserObject(meshPlugin, 0 /* index */, 0.0f /* time */);
+		displSubdivPlugin->setParameter(&abcMeshSource->displSubdivSourceMeshParam);
+
+		// Set other parameters.
+		displSubdivPlugin->setParameter(&abcMeshSource->displSubdivEdgeLengthParam);
+		displSubdivPlugin->setParameter(&abcMeshSource->useGlobalsParam);
+		displSubdivPlugin->setParameter(&abcMeshSource->maxSubdivLevelsParam);
+
+		// Set the displacement texture, if any.
+		if (displSubdivParams.displacementTex) {
+			abcMeshSource->displTextureParam.setUserObject(displSubdivParams.displacementTex, 0 /* index */, 0.0f /* time */);
+			displSubdivPlugin->setParameter(&abcMeshSource->displTextureParam);
+
+			abcMeshSource->displAmountParam.setFloat(displSubdivParams.displacementAmount, 0 /* index */, 0.0f /* time */);
+			displSubdivPlugin->setParameter(&abcMeshSource->displAmountParam);
+		}
+	}
+
+	abcMeshSource->displSubdivPlugin=displSubdivPlugin;
 
 	if (createInstance) {
 		AlembicMeshInstance *abcMeshInstance=new AlembicMeshInstance;
