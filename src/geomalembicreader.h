@@ -499,6 +499,9 @@ struct GeomAlembicReader: VR::VRayStaticGeomSource, VR::VRaySceneModifierInterfa
 		const tchar *userAttr,
 		int primaryVisibility
 	) VRAY_OVERRIDE;
+
+	VUtils::VRayStaticGeometry* newInstance(const VUtils::NewInstanceParameters &params) override;
+
 	void deleteInstance(VR::VRayStaticGeometry *instance) VRAY_OVERRIDE;
 
 	// From VRayPlugin
