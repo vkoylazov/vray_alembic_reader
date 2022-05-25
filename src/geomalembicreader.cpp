@@ -1,9 +1,12 @@
 #include "geomalembicreader.h"
+#include "getenvvars.h"
 
 using namespace VR;
 
 //*************************************************************
 // GeomAlembicReaderInstance
+
+static VR::GetEnvVarInt gEnvARRRI("ARRRI", 0);
 
 struct GeomAlembicReaderInstance: VRayStaticGeometry {
 	GeomAlembicReaderInstance(GeomAlembicReader *abcReader):reader(abcReader) {
@@ -109,6 +112,9 @@ protected:
 					vray
 				);
 				abcInstance->meshInstance=geom->newInstance(params);
+				if (gEnvARRRI.getValue()) {
+					VR::registerRenderInstance2(vray, geom, renderID, mtlPlugin, userAttr);
+				}
 			}
 		}
 	}
@@ -210,6 +216,7 @@ void GeomAlembicReader::deleteInstance(VRayStaticGeometry *instance) {
 }
 
 void GeomAlembicReader::preRenderBegin(VR::VRayRenderer *vray) {
+	gEnvARRRI.resetValue();
 	VRayPluginRendererInterface *pluginRenderer=(VRayPluginRendererInterface*) GET_INTERFACE(vray, EXT_PLUGIN_RENDERER);
 	if (!pluginRenderer) return; // Don't know how to modify the scene
 	plugman=pluginRenderer->getPluginManager();
