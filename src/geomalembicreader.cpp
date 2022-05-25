@@ -465,7 +465,7 @@ VRayPlugin* GeomAlembicReader::createDefaultMaterial(void) {
 const tchar *ignoredPlugins[]={
 	"Settings",
 	"Geom",
-	"RenderView"
+	"RenderView",
 	"Camera",
 	"Node",
 	"Light",
