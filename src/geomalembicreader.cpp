@@ -10,7 +10,7 @@ struct GeomAlembicReaderInstance: VRayStaticGeometry {
 	}
 
 	void compileGeometry(VR::VRayRenderer *vray, const VR::Transform *_tm, double *_times, int _tmCount) VRAY_OVERRIDE {
-		createMeshInstances(renderID, NULL, NULL, Transform(1), objectID, userAttrs.ptr(), primaryVisibility);
+		createMeshInstances(vray, renderID, NULL, NULL, Transform(1), objectID, userAttrs.ptr(), primaryVisibility);
 
 		const VRayFrameData &fdata=vray->getFrameData();
 
@@ -84,7 +84,7 @@ protected:
 		return static_cast<BSDFInterface*>(GET_INTERFACE(mtl, EXT_BSDF));
 	}
 
-	void createMeshInstances(int renderID, VolumetricInterface *volume, LightList *lightList, const Transform &baseTM, int objectID, const tchar *userAttr, int primaryVisibility) {
+	void createMeshInstances(VRayRenderer* vray, int renderID, VolumetricInterface *volume, LightList *lightList, const Transform &baseTM, int objectID, const tchar *userAttr, int primaryVisibility) {
 		int numInstances=reader->meshInstances.count();
 		for (int i=0; i<numInstances; i++) {
 			AlembicMeshInstance *abcInstance=reader->meshInstances[i];
@@ -96,7 +96,20 @@ protected:
 			StaticGeomSourceInterface *geom=static_cast<StaticGeomSourceInterface*>(GET_INTERFACE(geomPlugin, EXT_STATIC_GEOM_SOURCE));
 			if (geom) {
 				VRayPlugin *mtlPlugin=reader->getMaterialPluginForInstance(abcInstance->abcName);
-				abcInstance->meshInstance=geom->newInstance(getMaterial(mtlPlugin), getBSDF(mtlPlugin), renderID, NULL, lightList, baseTM, objectID, userAttr, primaryVisibility);
+				NewInstanceParameters params(
+					getMaterial(mtlPlugin),
+					getBSDF(mtlPlugin),
+					renderID,
+					NULL,
+					lightList,
+					baseTM,
+					objectID,
+					userAttr,
+					primaryVisibility,
+					vray
+				);
+				abcInstance->meshInstance=geom->newInstance(params);
+				VR::registerRenderInstance2(vray, geom, renderID, mtlPlugin, userAttr);
 			}
 		}
 	}
@@ -183,6 +196,10 @@ VRayStaticGeometry* GeomAlembicReader::newInstance(
 	abcReaderInstance->setPrimaryVisibility(primaryVisibility);
 	abcReaderInstance->setUserAttrs(userAttr);
 	return abcReaderInstance;
+}
+
+VRayStaticGeometry* GeomAlembicReader::newInstance(const NewInstanceParameters &params) {
+	return this->newInstance(params.mtl, params.bsdf, params.renderID, params.volume, params.lightList, params.baseTM, params.objectID, params.userAttributes, params.primaryVisibility);
 }
 
 void GeomAlembicReader::deleteInstance(VRayStaticGeometry *instance) {
@@ -448,7 +465,7 @@ VRayPlugin* GeomAlembicReader::createDefaultMaterial(void) {
 const tchar *ignoredPlugins[]={
 	"Settings",
 	"Geom",
-	"RenderView"
+	"RenderView",
 	"Camera",
 	"Node",
 	"Light",

@@ -94,10 +94,10 @@ struct AnimatedParam: VR::VRayPluginParameter {
 protected:
 	const tchar *paramName;
 
-	template<class T>
+	template<class U>
 	struct Keyframe {
 		double time;
-		T data;
+		U data;
 
 		Keyframe(void):time(0.0f) {}
 
@@ -138,11 +138,11 @@ struct AnimatedSimpleListParam: AnimatedParam<T> {
 	AnimatedSimpleListParam(const tchar *name):AnimatedParam<T>(name) {}
 
 	int getCount(double time) VRAY_OVERRIDE {
-		int keyframeIdx=getKeyframeIndex(time);
+		int keyframeIdx=this->getKeyframeIndex(time);
 		if (keyframeIdx==-1)
 			return -1;
 
-		return keyframes[keyframeIdx].data.count();
+		return this->keyframes[keyframeIdx].data.count();
 	}
 };
 
@@ -499,6 +499,9 @@ struct GeomAlembicReader: VR::VRayStaticGeomSource, VR::VRaySceneModifierInterfa
 		const tchar *userAttr,
 		int primaryVisibility
 	) VRAY_OVERRIDE;
+
+	VUtils::VRayStaticGeometry* newInstance(const VUtils::NewInstanceParameters &params) override;
+
 	void deleteInstance(VR::VRayStaticGeometry *instance) VRAY_OVERRIDE;
 
 	// From VRayPlugin
